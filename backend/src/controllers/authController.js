@@ -1,7 +1,5 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const db = require('../config/db');
 const { authLoginRequestDto } = require('../dto/requestDtos');
+const authService = require('../services/authService');
 
 const login = async (req, res) => {
   try {
@@ -13,63 +11,18 @@ const login = async (req, res) => {
       });
     }
 
-    const [usuarios] = await db.query(
-      `
-      SELECT
-        u.id_usuario,
-        u.usuario,
-        u.password,
-        u.id_rol,
-        r.nombre_rol
-      FROM usuarios u
-      INNER JOIN roles r
-        ON u.id_rol = r.id_rol
-      WHERE u.usuario = ?
-      `,
-      [usuario]
-    );
+    const autenticacion = await authService.autenticar(usuario, password);
 
-    if (usuarios.length === 0) {
+    if (!autenticacion) {
       return res.status(401).json({
         mensaje: 'Credenciales incorrectas'
       });
     }
-
-    const usuarioEncontrado = usuarios[0];
-
-    const passwordCorrecta = await bcrypt.compare(
-      password,
-      usuarioEncontrado.password
-    );
-
-    if (!passwordCorrecta) {
-      return res.status(401).json({
-        mensaje: 'Credenciales incorrectas'
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        id_usuario: usuarioEncontrado.id_usuario,
-        usuario: usuarioEncontrado.usuario,
-        id_rol: usuarioEncontrado.id_rol,
-        rol: usuarioEncontrado.nombre_rol
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '8h'
-      }
-    );
 
     return res.status(200).json({
       mensaje: 'Inicio de sesión correcto',
-      token,
-      usuario: {
-        id_usuario: usuarioEncontrado.id_usuario,
-        usuario: usuarioEncontrado.usuario,
-        id_rol: usuarioEncontrado.id_rol,
-        rol: usuarioEncontrado.nombre_rol
-      }
+      token: autenticacion.token,
+      usuario: autenticacion.usuario
     });
 
   } catch (error) {

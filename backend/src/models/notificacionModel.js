@@ -1,3 +1,5 @@
+const db = require('../config/db');
+
 const crearAlertasVencimiento = async (
   connection,
   { idTarea, destinatarioId, titulo, fechaVencimiento, version }
@@ -85,10 +87,97 @@ const crearNotificacionEntrega = async (
   );
 };
 
+const seleccionarDisponibles = `
+  SELECT
+    n.id_notificacion,
+    n.id_tarea,
+    n.tipo,
+    t.titulo AS titulo_tarea,
+    n.mensaje,
+    n.fecha_programada,
+    t.fecha_vencimiento,
+    n.leida,
+    n.fecha_lectura,
+    n.fecha_creacion,
+    CASE
+      WHEN n.leida = 1 THEN 'Leida'
+      ELSE 'Disponible'
+    END AS estado
+  FROM notificaciones n
+  INNER JOIN checklist_tareas t ON t.id_tarea = n.id_tarea
+  WHERE n.destinatario_id = ?
+    AND n.estado <> 'Cancelada'
+    AND n.fecha_programada <= NOW()
+`;
+
+const listarDisponibles = async (idUsuario) => {
+  const [notificaciones] = await db.query(
+    `${seleccionarDisponibles}
+     ORDER BY n.fecha_programada DESC, n.id_notificacion DESC`,
+    [idUsuario]
+  );
+  return notificaciones;
+};
+
+const contarNoLeidas = async (idUsuario) => {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS total_no_leidas
+     FROM notificaciones
+     WHERE destinatario_id = ?
+       AND estado = 'Programada'
+       AND leida = 0
+       AND fecha_programada <= NOW()`,
+    [idUsuario]
+  );
+  return Number(rows[0].total_no_leidas);
+};
+
+const marcarLeida = async (idNotificacion, idUsuario) => {
+  const [resultado] = await db.query(
+    `UPDATE notificaciones
+     SET leida = 1,
+         estado = 'Leida',
+         fecha_lectura = COALESCE(fecha_lectura, NOW())
+     WHERE id_notificacion = ?
+       AND destinatario_id = ?
+       AND estado <> 'Cancelada'
+       AND fecha_programada <= NOW()`,
+    [idNotificacion, idUsuario]
+  );
+  return resultado.affectedRows;
+};
+
+const buscarPropia = async (idNotificacion, idUsuario) => {
+  const [rows] = await db.query(
+    `SELECT id_notificacion, leida
+     FROM notificaciones
+     WHERE id_notificacion = ? AND destinatario_id = ?`,
+    [idNotificacion, idUsuario]
+  );
+  return rows[0] || null;
+};
+
+const marcarTodasLeidas = async (idUsuario) => {
+  const [resultado] = await db.query(
+    `UPDATE notificaciones
+     SET leida = 1, estado = 'Leida', fecha_lectura = COALESCE(fecha_lectura, NOW())
+     WHERE destinatario_id = ?
+       AND estado = 'Programada'
+       AND leida = 0
+       AND fecha_programada <= NOW()`,
+    [idUsuario]
+  );
+  return resultado.affectedRows;
+};
+
 module.exports = {
+  listarDisponibles,
+  contarNoLeidas,
+  marcarLeida,
+  buscarPropia,
+  marcarTodasLeidas,
   crearAlertasVencimiento,
   obtenerSiguienteVersionVencimiento,
   cancelarAlertasVencimiento,
   crearNotificacionEntrega
 };
-

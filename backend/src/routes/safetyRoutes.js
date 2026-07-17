@@ -1,6 +1,4 @@
 const express = require('express');
-const multer = require('multer');
-
 const router = express.Router();
 
 const safetyController = require(
@@ -11,7 +9,6 @@ const {
   verificarRol
 } = require('../middlewares/authMiddleware');
 const {
-  uploadSafety,
   validarFirmaImagen
 } = require(
   '../middlewares/uploadsSafetyMiddleware'
@@ -19,31 +16,14 @@ const {
 const limitarCreacionHallazgos = require(
   '../middlewares/safetyRateLimitMiddleware'
 );
+const cargarFotografia = require(
+  '../middlewares/safetyUploadMiddleware'
+);
 
 router.use(verificarToken);
 router.use(
   verificarRol('ADMINISTRADOR', 'SUPERVISOR')
 );
-
-const cargarFotografia = (req, res, next) => {
-  uploadSafety.single('foto')(req, res, (error) => {
-    if (!error) {
-      return next();
-    }
-
-    if (error instanceof multer.MulterError) {
-      const mensaje = error.code === 'LIMIT_FILE_SIZE'
-        ? 'La fotografía no puede superar 5 MB'
-        : 'No se pudo procesar la fotografía';
-
-      return res.status(400).json({ mensaje });
-    }
-
-    return res.status(400).json({
-      mensaje: error.message
-    });
-  });
-};
 
 router.get('/areas', safetyController.obtenerAreas);
 router.get(
