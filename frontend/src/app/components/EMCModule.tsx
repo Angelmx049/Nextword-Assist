@@ -171,6 +171,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
   const loadRecords = useCallback(async () => {
     setLoading(true);
     setError('');
+    setRecords([]);
     try {
       setRecords(await listMC({ operador: searchTerm, fecha: filterDate }));
     } catch (err) {
@@ -362,7 +363,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
                 </tbody>
               </table>
               {loading && <div className="text-center py-8 text-muted-foreground">Cargando registros...</div>}
-              {!loading && records.length === 0 && (
+              {!loading && !error && records.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
                   No se encontraron registros
                 </div>

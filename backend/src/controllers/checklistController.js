@@ -1,6 +1,12 @@
 const db = require('../config/db');
 const ExcelJS = require('exceljs');
 const { checklistTaskRequestDto } = require('../dto/requestDtos');
+const {
+  crearAlertasVencimiento,
+  obtenerSiguienteVersionVencimiento,
+  cancelarAlertasVencimiento,
+  crearNotificacionEntrega
+} = require('../models/notificacionModel');
 
 const ESTADOS_VALIDOS = [
   'Pendiente',
@@ -27,25 +33,26 @@ const obtenerRolToken = (req) => {
 };
 
 const convertirFechaMySQL = (fecha) => {
-  const date = new Date(fecha);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  const pad = (valor) => String(valor).padStart(2, '0');
-
-  return (
-    `${date.getFullYear()}-` +
-    `${pad(date.getMonth() + 1)}-` +
-    `${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:` +
-    `${pad(date.getMinutes())}:` +
-    `${pad(date.getSeconds())}`
+  if (typeof fecha !== 'string') return null;
+  const coincidencia = fecha.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ]([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/
   );
+  if (!coincidencia) return null;
+  const [, anio, mes, dia, hora, minuto, segundo = '00'] = coincidencia;
+  return `${anio}-${mes}-${dia} ${hora}:${minuto}:${segundo}`;
 };
 
 const actualizarTareasVencidas = async (connection = db) => {
+  await connection.query(`
+    UPDATE notificaciones n
+    INNER JOIN checklist_tareas t ON t.id_tarea = n.id_tarea
+    SET n.estado = 'Cancelada'
+    WHERE t.fecha_vencimiento < NOW()
+      AND t.estado IN ('Pendiente', 'En proceso', 'Rechazada')
+      AND n.evento_origen = 'Vencimiento'
+      AND n.estado = 'Programada'
+      AND n.leida = 0
+  `);
   await connection.query(`
     UPDATE checklist_tareas
     SET estado = 'Vencida'
@@ -93,94 +100,43 @@ const registrarHistorial = async (
 };
 
 const cancelarAlertasPendientes = async (connection, idTarea) => {
-  await connection.query(
-    `
-      UPDATE notificaciones_alertas
-      SET estado = 'Cancelada'
-      WHERE id_tarea = ?
-        AND estado = 'Pendiente'
-    `,
-    [idTarea]
-  );
+  await cancelarAlertasVencimiento(connection, idTarea);
 };
 
 const crearAlertasTarea = async (
   connection,
   idTarea,
-  fechaVencimiento
+  fechaVencimiento,
+  destinatarioId,
+  titulo,
+  version = 1
 ) => {
-  const minutosAlertas = [30, 20, 10];
-
-  for (const minutosAntes of minutosAlertas) {
-    await connection.query(
-      `
-        INSERT INTO notificaciones_alertas (
-          id_tarea,
-          minutos_antes,
-          fecha_programada,
-          estado
-        )
-        VALUES (
-          ?,
-          ?,
-          DATE_SUB(?, INTERVAL ? MINUTE),
-          'Pendiente'
-        )
-      `,
-      [
-        idTarea,
-        minutosAntes,
-        fechaVencimiento,
-        minutosAntes
-      ]
-    );
-  }
+  await crearAlertasVencimiento(connection, {
+    idTarea,
+    destinatarioId,
+    titulo,
+    fechaVencimiento,
+    version
+  });
 };
 
 const regenerarAlertasTarea = async (
   connection,
   idTarea,
-  fechaVencimiento
+  fechaVencimiento,
+  destinatarioId,
+  titulo
 ) => {
-  await connection.query(
-    `
-      DELETE FROM notificaciones_alertas
-      WHERE id_tarea = ?
-        AND estado = 'Pendiente'
-    `,
-    [idTarea]
+  await cancelarAlertasVencimiento(connection, idTarea);
+  const version = await obtenerSiguienteVersionVencimiento(connection, idTarea);
+  await crearAlertasTarea(
+    connection,
+    idTarea,
+    fechaVencimiento,
+    destinatarioId,
+    titulo,
+    version
   );
-
-  const minutosAlertas = [30, 20, 10];
-
-  for (const minutosAntes of minutosAlertas) {
-    await connection.query(
-      `
-        INSERT INTO notificaciones_alertas (
-          id_tarea,
-          minutos_antes,
-          fecha_programada,
-          estado
-        )
-        VALUES (
-          ?,
-          ?,
-          DATE_SUB(?, INTERVAL ? MINUTE),
-          'Pendiente'
-        )
-        ON DUPLICATE KEY UPDATE
-          fecha_programada = VALUES(fecha_programada),
-          fecha_enviada = NULL,
-          estado = 'Pendiente'
-      `,
-      [
-        idTarea,
-        minutosAntes,
-        fechaVencimiento,
-        minutosAntes
-      ]
-    );
-  }
 };
 
 const construirFiltros = ({
@@ -295,10 +251,12 @@ const crearTarea = async (req, res) => {
       });
     }
 
-    const fechaActual = new Date();
-    const fechaLimite = new Date(fecha_vencimiento);
+    const [validacionFecha] = await connection.query(
+      'SELECT ? > NOW() AS es_futura, TIMESTAMPDIFF(MINUTE, NOW(), ?) AS minutos',
+      [fechaVencimientoMySQL, fechaVencimientoMySQL]
+    );
 
-    if (fechaLimite <= fechaActual) {
+    if (!validacionFecha[0].es_futura) {
       return res.status(400).json({
         mensaje:
           'La fecha de vencimiento debe ser posterior a la fecha actual'
@@ -332,10 +290,7 @@ const crearTarea = async (req, res) => {
       });
     }
 
-    const limiteMinutos = Math.ceil(
-      (fechaLimite.getTime() - fechaActual.getTime()) /
-        (1000 * 60)
-    );
+    const limiteMinutos = Math.max(1, Number(validacionFecha[0].minutos));
 
     await connection.beginTransaction();
 
@@ -389,7 +344,10 @@ const crearTarea = async (req, res) => {
     await crearAlertasTarea(
       connection,
       idTarea,
-      fechaVencimientoMySQL
+      fechaVencimientoMySQL,
+      asignada_a,
+      titulo.trim(),
+      1
     );
 
     await connection.commit();
@@ -693,7 +651,7 @@ const editarTarea = async (req, res) => {
 
     const [tareas] = await connection.query(
       `
-        SELECT *
+        SELECT *, DATE_FORMAT(fecha_vencimiento, '%Y-%m-%d %H:%i:%s') AS fecha_vencimiento_texto
         FROM checklist_tareas
         WHERE id_tarea = ?
         FOR UPDATE
@@ -814,10 +772,11 @@ const editarTarea = async (req, res) => {
         });
       }
 
-      if (
-        new Date(fecha_vencimiento) <=
-        new Date()
-      ) {
+      const [validacionFecha] = await connection.query(
+        'SELECT ? > NOW() AS es_futura',
+        [fechaConvertida]
+      );
+      if (!validacionFecha[0].es_futura) {
         await connection.rollback();
 
         return res.status(400).json({
@@ -829,20 +788,11 @@ const editarTarea = async (req, res) => {
       nuevaFechaVencimiento = fechaConvertida;
     }
 
-    const fechaBase =
-      tareaActual.fecha_asignada ||
-      tareaActual.fecha_creacion;
-
-    const limiteMinutos = Math.max(
-      1,
-      Math.ceil(
-        (
-          new Date(nuevaFechaVencimiento).getTime() -
-          new Date(fechaBase).getTime()
-        ) /
-          (1000 * 60)
-      )
+    const [calculoLimite] = await connection.query(
+      'SELECT GREATEST(1, TIMESTAMPDIFF(MINUTE, ?, ?)) AS limite_minutos',
+      [tareaActual.fecha_asignada || tareaActual.fecha_creacion, nuevaFechaVencimiento]
     );
+    const limiteMinutos = Number(calculoLimite[0].limite_minutos);
 
     await connection.query(
       `
@@ -867,11 +817,25 @@ const editarTarea = async (req, res) => {
       ]
     );
 
-    if (fecha_vencimiento !== undefined) {
+    const vencimientoCambio =
+      fecha_vencimiento !== undefined &&
+      convertirFechaMySQL(fecha_vencimiento) !== tareaActual.fecha_vencimiento_texto;
+
+    if (vencimientoCambio) {
       await regenerarAlertasTarea(
         connection,
         id,
-        nuevaFechaVencimiento
+        nuevaFechaVencimiento,
+        nuevoResponsable,
+        nuevoTitulo
+      );
+    } else if (nuevoResponsable !== tareaActual.asignada_a) {
+      await regenerarAlertasTarea(
+        connection,
+        id,
+        nuevaFechaVencimiento,
+        nuevoResponsable,
+        nuevoTitulo
       );
     }
 
@@ -1106,7 +1070,7 @@ const entregarTarea = async (req, res) => {
     const numeroIntento =
       intentos[0].ultimo_intento + 1;
 
-    await connection.query(
+    const [resultadoEntrega] = await connection.query(
       `
         INSERT INTO checklist_entregas (
           id_tarea,
@@ -1130,6 +1094,14 @@ const entregarTarea = async (req, res) => {
         idUsuario
       ]
     );
+
+    await crearNotificacionEntrega(connection, {
+      idTarea: Number(id),
+      idEntrega: resultadoEntrega.insertId,
+      destinatarioId: tarea.creada_por,
+      titulo: tarea.titulo,
+      esReentrega: tarea.estado === 'Rechazada'
+    });
 
     const tipoEvento =
       tarea.estado === 'Rechazada'
@@ -1270,6 +1242,13 @@ const cancelarEntrega = async (req, res) => {
     }
 
     await connection.query(
+      `UPDATE notificaciones
+       SET estado = 'Cancelada'
+       WHERE id_entrega = ? AND estado = 'Programada' AND leida = 0`,
+      [ultimaEntrega.id_entrega]
+    );
+
+    await connection.query(
       `
         DELETE FROM checklist_entregas
         WHERE id_entrega = ?
@@ -1296,14 +1275,17 @@ const cancelarEntrega = async (req, res) => {
       actualizadoPor: idUsuario
     });
 
-    if (
-      new Date(tarea.fecha_vencimiento) >
-      new Date()
-    ) {
+    const [vigencia] = await connection.query(
+      'SELECT ? > NOW() AS es_futura',
+      [tarea.fecha_vencimiento]
+    );
+    if (vigencia[0].es_futura) {
       await regenerarAlertasTarea(
         connection,
         id,
-        tarea.fecha_vencimiento
+        tarea.fecha_vencimiento,
+        tarea.asignada_a,
+        tarea.titulo
       );
     }
 
@@ -1586,16 +1568,7 @@ const rechazarEntrega = async (req, res) => {
       actualizadoPor: idUsuario
     });
 
-    if (
-      new Date(tarea.fecha_vencimiento) >
-      new Date()
-    ) {
-      await regenerarAlertasTarea(
-        connection,
-        id,
-        tarea.fecha_vencimiento
-      );
-    }
+    await cancelarAlertasPendientes(connection, id);
 
     await connection.commit();
 
@@ -1906,99 +1879,38 @@ const obtenerEntregasTarea = async (req, res) => {
 // =====================================================
 
 const obtenerAlertasPendientes = async (req, res) => {
-  const connection = await db.getConnection();
-
   try {
     const idUsuario = obtenerIdUsuarioToken(req);
-    const rol = obtenerRolToken(req);
-
-    await actualizarTareasVencidas(connection);
-
-    const valores = [];
-
-    let filtroRol = '';
-
-    if (rol === 'ADMINISTRADOR') {
-      filtroRol = `
-        AND t.asignada_a = ?
-      `;
-
-      valores.push(idUsuario);
-    }
-
-    await connection.beginTransaction();
-
-    const [alertas] = await connection.query(
+    const [alertas] = await db.query(
       `
         SELECT
-          a.id_alerta,
-          a.id_tarea,
-          a.minutos_antes,
-          a.fecha_programada,
-
+          n.id_notificacion AS id_alerta,
+          n.id_tarea,
+          n.minutos_antes,
+          n.fecha_programada,
           t.titulo,
           t.descripcion,
           t.fecha_vencimiento,
           t.estado,
           t.prioridad,
-
-          TIMESTAMPDIFF(
-            MINUTE,
-            NOW(),
-            t.fecha_vencimiento
-          ) AS minutos_restantes
-
-        FROM notificaciones_alertas a
-
-        INNER JOIN checklist_tareas t
-          ON a.id_tarea = t.id_tarea
-
-        WHERE a.estado = 'Pendiente'
-          AND a.fecha_programada <= NOW()
-          AND t.estado IN (
-            'Pendiente',
-            'En proceso',
-            'Rechazada'
-          )
-
-          ${filtroRol}
-
-        ORDER BY
-          a.fecha_programada ASC
+          TIMESTAMPDIFF(MINUTE, NOW(), t.fecha_vencimiento) AS minutos_restantes
+        FROM notificaciones n
+        INNER JOIN checklist_tareas t ON n.id_tarea = t.id_tarea
+        WHERE n.destinatario_id = ?
+          AND n.evento_origen = 'Vencimiento'
+          AND n.estado <> 'Cancelada'
+          AND n.leida = 0
+          AND n.fecha_programada <= NOW()
+          AND t.estado IN ('Pendiente', 'En proceso')
+        ORDER BY n.fecha_programada DESC
       `,
-      valores
+      [idUsuario]
     );
-
-    if (alertas.length > 0) {
-      const idsAlertas = alertas.map(
-        (alerta) => alerta.id_alerta
-      );
-
-      const placeholders = idsAlertas
-        .map(() => '?')
-        .join(',');
-
-      await connection.query(
-        `
-          UPDATE notificaciones_alertas
-          SET
-            estado = 'Enviada',
-            fecha_enviada = NOW()
-          WHERE id_alerta IN (${placeholders})
-        `,
-        idsAlertas
-      );
-    }
-
-    await connection.commit();
-
     return res.status(200).json({
       total: alertas.length,
       alertas
     });
   } catch (error) {
-    await connection.rollback();
-
     console.error(
       'Error al obtener alertas:',
       error
@@ -2008,8 +1920,6 @@ const obtenerAlertasPendientes = async (req, res) => {
       mensaje:
         'Error interno al obtener las alertas'
     });
-  } finally {
-    connection.release();
   }
 };
 

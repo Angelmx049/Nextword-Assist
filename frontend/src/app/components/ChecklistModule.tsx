@@ -550,6 +550,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
   const loadTasks = useCallback(async () => {
     setLoading(true);
     setError('');
+    setTasks([]);
     try { setTasks(await listChecklist(backendFilters())); }
     catch (err) { setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible cargar Checklist'); }
     finally { setLoading(false); }
@@ -666,7 +667,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <h1 className="text-3xl tracking-wider">CHECKLIST</h1>
-              {nearExpiry > 0 && (
+              {!loading && !error && nearExpiry > 0 && (
                 <span className="flex items-center gap-1 bg-red-600 text-white text-xs px-2 py-0.5 rounded font-bold">
                   <Bell className="w-3 h-3" /> {nearExpiry} próxima{nearExpiry > 1 ? 's' : ''}
                 </span>
@@ -712,7 +713,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
               className={`px-5 py-2 text-sm font-bold border-b-2 -mb-0.5 transition-colors ${tab === t
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-              {t === 'activas' ? `ACTIVAS (${activeCount})` : 'HISTORIAL'}
+              {t === 'activas' ? `ACTIVAS (${loading || error ? 'Sin datos' : activeCount})` : 'HISTORIAL'}
             </button>
           ))}
         </div>
@@ -722,7 +723,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
 
         {/* Task list */}
         <div className="space-y-3">
-          {filteredTasks.length === 0 ? (
+          {!loading && !error && filteredTasks.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground bg-card border-2 border-border rounded">
               {tab === 'activas' ? 'No hay tareas activas' : 'No hay tareas en el historial'}
             </div>

@@ -4,12 +4,18 @@ import {
   CheckSquare,
   AlertTriangle,
   Shield,
-  KeyRound,
   LogOut,
   Bell
 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import NotificationPanel from './NotificationPanel';
 import logoImg from '../../imports/Captura_de_pantalla_2026-05-27_211047.png';
+import { ApiError } from '../../services/api';
+import {
+  getNotificationSummary, listNotifications, markAllNotificationsRead,
+  markNotificationRead, type AssistNotification,
+} from '../../services/notificaciones';
 
 interface DashboardProps {
   username: string;
@@ -19,6 +25,75 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ username, role, onModuleSelect, onLogout }: DashboardProps) {
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AssistNotification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [notificationError, setNotificationError] = useState('');
+  const [pendingId, setPendingId] = useState<number | null>(null);
+
+  const errorMessage = (error: unknown) => error instanceof ApiError
+    ? error.message
+    : 'No fue posible obtener las notificaciones';
+
+  const refreshSummary = useCallback(async () => {
+    try {
+      const response = await getNotificationSummary();
+      setUnreadCount(response.total_no_leidas);
+    } catch (error) {
+      setUnreadCount(null);
+      setNotificationError(errorMessage(error));
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshSummary();
+    const interval = window.setInterval(() => void refreshSummary(), 60000);
+    return () => window.clearInterval(interval);
+  }, [refreshSummary]);
+
+  const openNotifications = async () => {
+    setPanelOpen(true);
+    setLoadingNotifications(true);
+    setNotificationError('');
+    try {
+      const response = await listNotifications();
+      setNotifications(response.notificaciones);
+      setUnreadCount(response.total_no_leidas);
+    } catch (error) {
+      setNotificationError(errorMessage(error));
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  const markRead = async (id: number) => {
+    setPendingId(id);
+    try {
+      await markNotificationRead(id);
+      setNotifications(items => items.map(item => item.id_notificacion === id
+        ? { ...item, leida: true, estado: 'Leida' }
+        : item));
+      await refreshSummary();
+    } catch (error) {
+      setNotificationError(errorMessage(error));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const markAllRead = async () => {
+    setPendingId(0);
+    try {
+      await markAllNotificationsRead();
+      setNotifications(items => items.map(item => ({ ...item, leida: true, estado: 'Leida' })));
+      await refreshSummary();
+    } catch (error) {
+      setNotificationError(errorMessage(error));
+    } finally {
+      setPendingId(null);
+    }
+  };
   const displayRole = role === 'ADMINISTRADOR'
     ? 'Administrador'
     : role === 'SUPERVISOR'
@@ -41,7 +116,6 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
     { id: 'checklist', name: 'CHECKLIST', icon: CheckSquare, description: 'Tareas y Seguimiento' },
     { id: 'slam', name: 'SLAM', icon: AlertTriangle, description: 'Reporte de Incidentes' },
     { id: 'safety', name: 'SAFETY', icon: Shield, description: 'Hallazgos de Seguridad' },
-    { id: 'password', name: 'CONTRASEÑA', icon: KeyRound, description: 'Cambiar contraseña' },
   ];
 
   return (
@@ -58,9 +132,9 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
               <p className="text-sm text-foreground">Sistema de Operaciones Logísticas</p>
             </div>
             <div className="flex items-center gap-3">
-              <button className="relative p-2 border-2 border-secondary bg-secondary text-secondary-foreground hover:bg-secondary/90">
+              <button onClick={() => void openNotifications()} aria-label="Abrir notificaciones" className="relative p-2 border-2 border-secondary bg-secondary text-secondary-foreground hover:bg-secondary/90">
                 <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground text-xs flex items-center justify-center rounded-full font-bold">3</span>
+                {unreadCount !== null && unreadCount > 0 && <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 bg-destructive text-destructive-foreground text-xs flex items-center justify-center rounded-full font-bold">{unreadCount > 99 ? '99+' : unreadCount}</span>}
               </button>
               <button
                 onClick={onLogout}
@@ -115,21 +189,16 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
           ))}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-card border-2 border-border p-6 hover:shadow-lg transition-all">
-            <p className="text-sm text-muted-foreground mb-2">Tareas Pendientes</p>
-            <p className="text-4xl">12</p>
-          </div>
+        <div className="mt-8 max-w-sm">
           <div className="bg-card border-2 border-warning p-6 hover:shadow-lg transition-all">
-            <p className="text-sm text-muted-foreground mb-2">Alertas Activas</p>
-            <p className="text-4xl">3</p>
-          </div>
-          <div className="bg-card border-2 border-destructive p-6 hover:shadow-lg transition-all">
-            <p className="text-sm text-muted-foreground mb-2">Incidentes Abiertos</p>
-            <p className="text-4xl">1</p>
+            <p className="text-sm text-muted-foreground mb-2">Notificaciones sin leer</p>
+            <p className={unreadCount === null ? 'text-base text-muted-foreground' : 'text-4xl'}>
+              {unreadCount === null ? 'Sin datos' : unreadCount}
+            </p>
           </div>
         </div>
       </main>
+      {panelOpen && <NotificationPanel notifications={notifications} loading={loadingNotifications} error={notificationError} pendingId={pendingId} onClose={() => setPanelOpen(false)} onRead={id => void markRead(id)} onReadAll={() => void markAllRead()} />}
     </div>
   );
 }

@@ -57,6 +57,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
   const loadRecords = useCallback(async () => {
     setLoading(true);
     setError('');
+    setRecords([]);
     try { setRecords(await listGemba(currentFilters())); }
     catch (err) { setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible cargar Gemba Ride'); }
     finally { setLoading(false); }
@@ -371,7 +372,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRecords.length === 0 ? (
+                  {!loading && !error && filteredRecords.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron registros</td>
                     </tr>
@@ -420,7 +421,9 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">{filteredRecords.length} registro(s) encontrado(s)</p>
+            {!loading && !error && (
+              <p className="text-xs text-muted-foreground mt-2">{filteredRecords.length} registro(s) encontrado(s)</p>
+            )}
           </>
         )}
       </main>

@@ -8,6 +8,7 @@ const protectedRoutes = require('./routes/protectedRoutes');
 const mcRoutes = require('./routes/mcRoutes');
 const gembaRoutes = require('./routes/gembaRoutes');
 const checklistRoutes = require('./routes/checklistRoutes');
+const notificacionRoutes = require('./routes/notificacionRoutes');
 const slamRoutes = require('./routes/slamRoutes');
 const safetyRoutes = require('./routes/safetyRoutes');
 const safetyEvidenceRoutes = require(
@@ -34,6 +35,7 @@ app.use('/api/protected', protectedRoutes);
 app.use('/api/mc', mcRoutes);
 app.use('/api/gemba', gembaRoutes);
 app.use('/api/checklist', checklistRoutes);
+app.use('/api/notificaciones', notificacionRoutes);
 app.use('/api/slam', slamRoutes);
 app.use('/api/safety', safetyRoutes);
 

@@ -7,7 +7,6 @@ import GembaModule from './components/GembaModule';
 import ChecklistModule from './components/ChecklistModule';
 import SlamModule from './components/SlamModule';
 import SafetyModule from '../services/SafetyModuleImpl';
-import ChangePasswordModule from './components/ChangePasswordModule';
 import { getSession, logout } from '../services/auth';
 import type { AuthSession } from '../services/session';
 
@@ -17,7 +16,6 @@ const MODULE_PATHS: Record<string, string> = {
   checklist: '/checklist',
   slam: '/slam',
   safety: '/safety',
-  password: '/password'
 };
 
 function ProtectedRoute({ session }: { session: AuthSession | null }) {
@@ -88,10 +86,6 @@ export default function App() {
         />
         <Route path="/slam" element={<SlamModule onBack={handleBackToDashboard} username={username} />} />
         <Route path="/safety" element={<SafetyModule onBack={handleBackToDashboard} username={username} />} />
-        <Route
-          path="/password"
-          element={<ChangePasswordModule onBack={handleBackToDashboard} username={username} />}
-        />
       </Route>
 
       <Route path="*" element={<Navigate to={session ? '/dashboard' : '/login'} replace />} />

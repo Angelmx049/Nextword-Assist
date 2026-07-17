@@ -112,14 +112,6 @@ export default function Login({ onLogin }: LoginProps) {
             {isSubmitting ? 'INICIANDO SESIÓN...' : 'INICIAR SESIÓN'}
           </button>
 
-          <div className="text-center">
-            <button
-              type="button"
-              className="text-foreground hover:text-primary text-sm"
-            >
-              ¿Olvidó su contraseña?
-            </button>
-          </div>
         </form>
       </div>
     </div>
