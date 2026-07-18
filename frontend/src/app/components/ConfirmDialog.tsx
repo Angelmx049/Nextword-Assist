@@ -1,4 +1,18 @@
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+
+export const DEFAULT_PAGE_SIZE = 10;
+
+interface PaginationProps { page: number; totalItems: number; pageSize?: number; onPageChange: (page: number) => void }
+
+export function ModulePagination({ page, totalItems, pageSize = DEFAULT_PAGE_SIZE, onPageChange }: PaginationProps) {
+  const totalPages = Math.ceil(totalItems / pageSize);
+  if (totalItems === 0 || totalPages <= 1) return null;
+  return <nav className="module-pagination" aria-label="Paginación"><p>{totalItems} registro{totalItems === 1 ? '' : 's'}</p><div>
+    <button type="button" disabled={page === 1} onClick={() => onPageChange(page - 1)}><ChevronLeft aria-hidden="true" /><span>ANTERIOR</span></button>
+    <span className="module-pagination__status" aria-current="page">Página {page} de {totalPages}</span>
+    <button type="button" disabled={page === totalPages} onClick={() => onPageChange(page + 1)}><span>SIGUIENTE</span><ChevronRight aria-hidden="true" /></button>
+  </div></nav>;
+}
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -13,7 +27,7 @@ export default function ConfirmDialog({ isOpen, title, message, onConfirm, onCan
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-card border-4 border-destructive max-w-md w-full shadow-2xl">
+      <div className="bg-card border-4 border-destructive max-w-xl w-full shadow-2xl">
         <div className="bg-destructive text-destructive-foreground px-6 py-5">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-8 h-8" />

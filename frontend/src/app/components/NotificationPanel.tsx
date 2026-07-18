@@ -36,7 +36,7 @@ export default function NotificationPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="notification-title"
-        className="h-full w-full max-w-md bg-card text-foreground shadow-2xl flex flex-col"
+        className="h-full w-full max-w-lg bg-card text-foreground shadow-2xl flex flex-col"
         onMouseDown={event => event.stopPropagation()}
       >
         <div className="p-4 border-b-2 border-border flex items-center justify-between gap-3">

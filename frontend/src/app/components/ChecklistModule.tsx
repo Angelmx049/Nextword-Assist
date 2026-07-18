@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Plus, Download, Edit, Clock, Bell, Eye, CheckCircle, XCircle,
-  RotateCcw, X, Search, Filter, ChevronDown, FileText, AlertCircle
+  RotateCcw, X, Filter, ChevronDown, FileText, AlertCircle
 } from 'lucide-react';
 import { ApiError } from '../../services/api';
+import { ModulePagination, DEFAULT_PAGE_SIZE } from './ConfirmDialog';
 import {
   acceptChecklistTask, cancelChecklistTask, createChecklistTask, deliverChecklistTask,
   exportChecklist, getChecklistTaskDetails, listChecklist, listChecklistAdministrators,
@@ -84,13 +85,13 @@ function formatDateTime(iso: string) {
 // ─── Modal Base ──────────────────────────────────────────────────────────────
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-card border-2 border-border w-full max-w-lg mx-4 shadow-xl rounded">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="checklist-modal bg-card border-2 border-border w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-y-auto shadow-xl rounded-md">
         <div className="bg-primary px-5 py-3 flex items-center justify-between rounded-t">
           <h3 className="text-primary-foreground font-bold tracking-wide text-sm">{title}</h3>
           <button onClick={onClose} className="text-primary-foreground hover:opacity-70"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-6 md:p-8">{children}</div>
       </div>
     </div>
   );
@@ -496,24 +497,24 @@ function FilterBar({ filters, onChange, onClear, isSupervisor }: {
   filters: Filters; onChange: (f: Filters) => void; onClear: () => void; isSupervisor: boolean;
 }) {
   return (
-    <div className="bg-card border border-border p-3 rounded mb-4 flex flex-wrap gap-2 items-end">
-      <div className="flex items-center gap-1 flex-1 min-w-32">
-        <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+    <div className="module-filter-panel module-filter-grid">
+      <div className="relative">
+        <label className="module-field-label">Buscar</label>
         <input placeholder="Buscar tarea..." value={filters.search}
           onChange={e => onChange({ ...filters, search: e.target.value })}
-          className="w-full px-2 py-1.5 border border-border bg-background text-xs focus:outline-none focus:border-primary rounded" />
+          className="module-control" />
       </div>
-      <select value={filters.estado} onChange={e => onChange({ ...filters, estado: e.target.value })}
-        className="px-2 py-1.5 border border-border bg-background text-xs focus:outline-none focus:border-primary rounded">
+      <label><span className="module-field-label">Estado</span><select value={filters.estado} onChange={e => onChange({ ...filters, estado: e.target.value })}
+        className="module-control">
         <option value="">Todos los estados</option>
         {(Object.keys(ESTADO_LABELS) as TaskStatus[]).map(s => (
           <option key={s} value={s}>{ESTADO_LABELS[s]}</option>
         ))}
-      </select>
-      <input type="date" value={filters.fecha} onChange={e => onChange({ ...filters, fecha: e.target.value })}
-        className="px-2 py-1.5 border border-border bg-background text-xs focus:outline-none focus:border-primary rounded" />
+      </select></label>
+      <label><span className="module-field-label">Fecha</span><input type="date" value={filters.fecha} onChange={e => onChange({ ...filters, fecha: e.target.value })}
+        className="module-control" /></label>
       <button onClick={onClear}
-        className="px-3 py-1.5 border border-border text-xs font-bold hover:border-primary bg-background rounded flex items-center gap-1">
+        className="module-button bg-background border-border hover:border-primary">
         <X className="w-3 h-3" /> LIMPIAR
       </button>
     </div>
@@ -532,6 +533,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
   const mutationPendingRef = useRef(false);
   const [tab, setTab] = useState<'activas' | 'historial'>('activas');
   const [filters, setFilters] = useState<Filters>({ search: '', responsable: '', estado: '', fecha: '' });
+  const [page, setPage] = useState(1);
 
   // Modals
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -648,6 +650,8 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
     if (tab === 'historial' && !inHistory) return false;
     return true;
   });
+  const pagedTasks = filteredTasks.slice((page - 1) * DEFAULT_PAGE_SIZE, page * DEFAULT_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [filters, tab]);
 
   const activeCount = tasks.filter(t => ACTIVE_STATES.includes(t.estado)).length;
   const nearExpiry = tasks.filter(t => {
@@ -659,7 +663,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-primary text-foreground px-6 py-4 shadow-md">
+      <header className="module-header bg-primary text-foreground py-4 shadow-md">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="hover:opacity-70">
             <ArrowLeft className="w-8 h-8" />
@@ -682,18 +686,18 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
         </div>
       </header>
 
-      <main className="p-6 max-w-6xl mx-auto">
+      <main className="module-page">
         {error && <div className="mb-4 border-2 border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
         {loading && <div className="mb-4 text-sm text-muted-foreground">Cargando Checklist...</div>}
         {/* Action bar */}
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="module-actions">
           {isSupervisor && (
             <button onClick={() => { setEditingTask(null); setShowTaskForm(true); }}
-              className="bg-primary text-primary-foreground px-4 py-2 font-bold text-sm hover:bg-primary/90 flex items-center gap-2 rounded border-2 border-primary">
+              className="module-button bg-primary text-primary-foreground border-primary hover:bg-primary/90">
               <Plus className="w-4 h-4" /> NUEVA TAREA
             </button>
           )}
-          <button onClick={handleExport} disabled={operationPending} className="bg-card text-foreground px-4 py-2 font-bold text-sm border-2 border-border hover:border-primary flex items-center gap-2 rounded disabled:opacity-50">
+          <button onClick={handleExport} disabled={operationPending} className="module-button bg-card text-foreground border-border hover:border-primary">
             <Download className="w-4 h-4" /> EXPORTAR EXCEL
           </button>
         </div>
@@ -728,11 +732,12 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
               {tab === 'activas' ? 'No hay tareas activas' : 'No hay tareas en el historial'}
             </div>
           ) : (
-            filteredTasks.map(task => (
+            pagedTasks.map(task => (
               <TaskCard key={task.id} task={task} isSupervisor={isSupervisor} onAction={handleAction} />
             ))
           )}
         </div>
+        {!loading && !error && <ModulePagination page={page} totalItems={filteredTasks.length} onPageChange={setPage} />}
       </main>
 
       {/* Modals */}

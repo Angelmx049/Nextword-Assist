@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { ModulePagination, DEFAULT_PAGE_SIZE } from './ConfirmDialog';
 import { ArrowLeft, Plus, Search, Edit, Trash2, Download, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import { ApiError } from '../../services/api';
@@ -158,6 +159,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [page, setPage] = useState(1);
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
@@ -167,6 +169,8 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
     operador: username,
     observaciones: ''
   });
+  useEffect(() => { setPage(1); }, [searchTerm, filterDate]);
+  const pagedRecords = records.slice((page - 1) * DEFAULT_PAGE_SIZE, page * DEFAULT_PAGE_SIZE);
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -275,7 +279,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-primary text-foreground px-6 py-4 shadow-md">
+      <header className="module-header bg-primary text-foreground py-4 shadow-md">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="hover:opacity-70">
             <ArrowLeft className="w-8 h-8" />
@@ -287,24 +291,24 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
         </div>
       </header>
 
-      <main className="p-6">
+      <main className="module-page">
         {!showForm ? (
           <>
-            <div className="mb-6 flex flex-wrap gap-4">
+            <div className="module-actions">
               <button
                 onClick={() => setShowForm(true)}
-                className="bg-primary text-primary-foreground px-6 py-3 border-2 border-primary hover:bg-primary/90 flex items-center gap-2"
+                className="module-button bg-primary text-primary-foreground border-primary hover:bg-primary/90"
               >
                 <Plus className="w-5 h-5" />
                 NUEVO REGISTRO
               </button>
-              <button onClick={handleExport} disabled={operation !== null} className="bg-card text-foreground px-6 py-3 border-2 border-border hover:border-primary flex items-center gap-2 disabled:opacity-50">
+              <button onClick={handleExport} disabled={operation !== null} className="module-button bg-card text-foreground border-border hover:border-primary">
                 <Download className="w-5 h-5" />
                 {operation === 'export' ? 'EXPORTANDO...' : 'EXPORTAR'}
               </button>
             </div>
 
-            <div className="bg-card border-2 border-border p-4 mb-6">
+            <div className="module-filter-panel">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -313,7 +317,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
                     placeholder="Filtrar por operador..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary"
+                    className="module-control pl-10"
                   />
                 </div>
                 <DatePicker value={filterDate} onChange={setFilterDate} />
@@ -322,8 +326,8 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
 
             {error && <div className="mb-6 border-2 border-destructive p-4 text-destructive">{error}</div>}
 
-            <div className="bg-card border-2 border-border overflow-x-auto">
-              <table className="w-full">
+            <div className="module-table-shell"><div className="module-table-scroll">
+              <table className="module-table">
                 <thead className="bg-muted">
                   <tr>
                     <th className="px-4 py-3 text-left border-b-2 border-border">FECHA</th>
@@ -335,7 +339,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record, idx) => (
+                  {pagedRecords.map((record, idx) => (
                     <tr key={record.id} className={idx % 2 === 0 ? 'bg-card' : 'bg-muted/30'}>
                       <td className="px-4 py-3 border-b border-border">{record.fecha}</td>
                       <td className="px-4 py-3 border-b border-border">{record.hora}</td>
@@ -368,16 +372,18 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
                   No se encontraron registros
                 </div>
               )}
-            </div>
+            </div></div>
+            {!loading && !error && <ModulePagination page={page} totalItems={records.length} onPageChange={setPage} />}
           </>
         ) : (
-          <div className="bg-card border-2 border-border p-6 max-w-2xl mx-auto">
-            <h2 className="text-2xl mb-6">
-              {editingId ? 'EDITAR REGISTRO' : 'NUEVO REGISTRO'}
-            </h2>
-            {error && <div className="mb-4 border-2 border-destructive p-4 text-destructive">{error}</div>}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="w-[calc(100%_-_32px)] max-w-[700px] mx-auto mt-6">
+            <form onSubmit={handleSubmit}>
+              <div className="bg-card border border-border shadow-sm p-5 md:p-6 space-y-4">
+                <h2 className="text-2xl mb-6">
+                  {editingId ? 'EDITAR REGISTRO' : 'NUEVO REGISTRO'}
+                </h2>
+                {error && <div className="mb-4 border-2 border-destructive p-4 text-destructive">{error}</div>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block mb-2">Fecha</label>
                   <input
@@ -398,48 +404,49 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
                     required
                   />
                 </div>
+                </div>
+                <div>
+                  <label className="block mb-2">MC</label>
+                  <input
+                    type="text"
+                    value={formData.evento}
+                    onChange={(e) => setFormData({ ...formData, evento: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block mb-2">Operador</label>
+                  <input
+                    type="text"
+                    value={formData.operador}
+                    onChange={(e) => setFormData({ ...formData, operador: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block mb-2">Observaciones</label>
+                  <textarea
+                    value={formData.observaciones}
+                    onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
+                    className="w-full h-[120px] px-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary resize-none"
+                    rows={4}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block mb-2">MC</label>
-                <input
-                  type="text"
-                  value={formData.evento}
-                  onChange={(e) => setFormData({ ...formData, evento: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block mb-2">Operador</label>
-                <input
-                  type="text"
-                  value={formData.operador}
-                  onChange={(e) => setFormData({ ...formData, operador: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block mb-2">Observaciones</label>
-                <textarea
-                  value={formData.observaciones}
-                  onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-border bg-input-background focus:outline-none focus:border-primary"
-                  rows={4}
-                />
-              </div>
-              <div className="flex gap-4 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                 <button
                   type="submit"
                   disabled={operation !== null}
-                  className="flex-1 bg-primary text-primary-foreground py-3 border-2 border-primary hover:bg-primary/90 disabled:opacity-50"
+                  className="w-full bg-primary text-primary-foreground py-3 border-2 border-primary hover:bg-primary/90 disabled:opacity-50"
                 >
                   {operation === 'save' ? 'GUARDANDO...' : 'GUARDAR'}
                 </button>
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex-1 bg-secondary text-secondary-foreground py-3 border-2 border-secondary hover:bg-secondary/90"
+                  className="w-full bg-secondary text-secondary-foreground py-3 border-2 border-secondary hover:bg-secondary/90"
                 >
                   CANCELAR
                 </button>

@@ -39,8 +39,8 @@ export default function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-card border-2 border-border p-8 shadow-xl">
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="w-[calc(100%_-_32px)] max-w-[440px] bg-card border-2 border-border px-8 pt-8 pb-9 shadow-xl">
         <div className="text-center mb-8">
           <div className="mb-6 px-8">
             <ImageWithFallback
@@ -52,7 +52,7 @@ export default function Login({ onLogin }: LoginProps) {
           <p className="text-foreground">Sistema de Operaciones Logísticas</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="w-full space-y-6">
           <div>
             <label htmlFor="username" className="block mb-2 text-foreground">
               Usuario

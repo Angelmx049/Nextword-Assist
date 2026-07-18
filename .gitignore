@@ -32,3 +32,7 @@ Thumbs.db
 
 # Archivos temporales
 *.log
+
+# Dependencias y caché de pnpm
+node_modules/
+.pnpm-store/

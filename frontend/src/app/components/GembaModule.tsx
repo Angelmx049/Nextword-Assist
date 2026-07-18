@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, FileText, Download, Eye, Edit, Trash2, X, ChevronLeft, User, Car, Clock, MapPin, Star } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
+import { ModulePagination, DEFAULT_PAGE_SIZE } from './ConfirmDialog';
 import { ApiError } from '../../services/api';
 import { createGemba, deleteGemba, exportGemba, listCouriers, listGemba, updateGemba, type Courier, type EvaluacionView, type GembaFilters, type GembaRecord } from '../../services/gemba';
 
@@ -29,6 +30,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
   const [filterCourier, setFilterCourier] = useState('');
   const [filterFecha, setFilterFecha] = useState('');
   const [filterEval, setFilterEval] = useState('');
+  const [page, setPage] = useState(1);
 
   const [records, setRecords] = useState<GembaRecord[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
@@ -146,11 +148,13 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
   };
 
   const filteredRecords = records;
+  const pagedRecords = filteredRecords.slice((page - 1) * DEFAULT_PAGE_SIZE, page * DEFAULT_PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [filterCourier, filterFecha, filterEval]);
   const selectedCourierName = couriers.find(courier => courier.id === selectedCourier)?.nombre ?? '';
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-primary text-foreground px-6 py-4 shadow-md">
+      <header className="module-header bg-primary text-foreground py-4 shadow-md">
         <div className="flex items-center gap-4">
           <button
             onClick={showForm || showHistory ? () => { setShowForm(false); setShowHistory(false); setSelectedCourier(null); setEditingId(null); } : onBack}
@@ -165,7 +169,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
         </div>
       </header>
 
-      <main className="p-4 md:p-6">
+      <main className="module-page">
         {error && <div className="mb-4 border-2 border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
         {loading && <div className="mb-4 text-sm text-muted-foreground">Cargando datos de Gemba Ride...</div>}
 
@@ -219,57 +223,59 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
 
         {/* Form */}
         {showForm && (
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-center gap-3 mb-6">
-              <button onClick={resetForm} className="hover:opacity-70 transition-opacity">
-                <ChevronLeft className="w-6 h-6" />
-              </button>
+          <div className="w-[calc(100%_-_32px)] max-w-[680px] mx-auto mt-7">
+            <div className="flex items-center mb-6">
+              {editingId && (
+                <button onClick={resetForm} className="mr-3 hover:opacity-70 transition-opacity">
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+              )}
               <h2 className="text-2xl font-bold tracking-wide">
                 {editingId ? 'EDITAR EVALUACIÓN' : 'NUEVA EVALUACIÓN'} — {selectedCourierName}
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="bg-card border-2 border-border p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="w-full box-border bg-card border border-border shadow-sm p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Fecha</label>
                     <input type="date" value={formData.fecha}
                       onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                      className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
+                      className="w-full box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Hora</label>
                     <input type="time" value={formData.hora}
                       onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
-                      className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
+                      className="w-full box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Número Económico</label>
                     <input type="text" value={formData.numeroEconomico} placeholder="VH-XXXX"
                       onChange={(e) => setFormData({ ...formData, numeroEconomico: e.target.value })}
-                      className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
+                      className="w-full box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Número de Paradas</label>
                     <input type="number" value={formData.numeroParadas}
                       onChange={(e) => setFormData({ ...formData, numeroParadas: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
+                      className="w-full box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Tiempo Total</label>
                     <input type="text" value={formData.tiempoTotal} placeholder="4:30"
                       onChange={(e) => setFormData({ ...formData, tiempoTotal: e.target.value })}
-                      className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
+                      className="w-full box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary" required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Evaluación</label>
                     <select value={formData.evaluacion}
                       onChange={(e) => setFormData({ ...formData, evaluacion: e.target.value })}
-                      className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary">
+                      className="w-full box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary">
                       <option value="Excelente">Excelente</option>
                       <option value="Bueno">Bueno</option>
                       <option value="Regular">Regular</option>
@@ -281,15 +287,15 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                   <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Observaciones</label>
                   <textarea value={formData.observaciones}
                     onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary resize-none"
+                    className="w-full h-[120px] box-border px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary resize-none"
                     rows={4} required />
                 </div>
               </div>
-              <div className="flex gap-4">
-                <button type="submit" disabled={operationPending} className="flex-1 bg-primary text-primary-foreground py-3 border-2 border-primary hover:bg-primary/90 transition-colors font-bold tracking-wide disabled:opacity-50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button type="submit" disabled={operationPending} className="w-full bg-primary text-primary-foreground py-3 border-2 border-primary hover:bg-primary/90 transition-colors font-bold tracking-wide disabled:opacity-50">
                   {operationPending ? 'GUARDANDO...' : 'GUARDAR'}
                 </button>
-                <button type="button" onClick={resetForm} className="flex-1 bg-secondary text-secondary-foreground py-3 border-2 border-secondary hover:bg-secondary/90 transition-colors font-bold tracking-wide">
+                <button type="button" onClick={resetForm} className="w-full bg-secondary text-secondary-foreground py-3 border-2 border-secondary hover:bg-secondary/90 transition-colors font-bold tracking-wide">
                   CANCELAR
                 </button>
               </div>
@@ -320,11 +326,11 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
             </div>
 
             {/* Filters */}
-            <div className="bg-card border-2 border-border p-4 mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="module-filter-panel module-filter-grid">
               <div>
                 <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Courier</label>
                 <select value={filterCourier} onChange={(e) => setFilterCourier(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary text-sm">
+                  className="module-control">
                   <option value="">Todos</option>
                   {couriers.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
@@ -332,12 +338,12 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
               <div>
                 <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Fecha</label>
                 <input type="date" value={filterFecha} onChange={(e) => setFilterFecha(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary text-sm" />
+                  className="module-control" />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Evaluación</label>
                 <select value={filterEval} onChange={(e) => setFilterEval(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-border bg-input-background focus:outline-none focus:border-primary text-sm">
+                  className="module-control">
                   <option value="">Todas</option>
                   <option value="Excelente">Excelente</option>
                   <option value="Bueno">Bueno</option>
@@ -349,7 +355,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                 <div className="md:col-span-3 flex justify-end">
                   <button
                     onClick={() => { setFilterCourier(''); setFilterFecha(''); setFilterEval(''); }}
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                    className="module-button bg-card border-border text-foreground hover:border-primary"
                   >
                     <X className="w-3 h-3" /> Limpiar filtros
                   </button>
@@ -357,8 +363,8 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
               )}
             </div>
 
-            <div className="bg-card border-2 border-border overflow-x-auto">
-              <table className="w-full">
+            <div className="module-table-shell"><div className="module-table-scroll">
+              <table className="module-table">
                 <thead className="bg-muted">
                   <tr>
                     <th className="px-4 py-3 text-left border-b-2 border-border text-sm">COURIER</th>
@@ -376,7 +382,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron registros</td>
                     </tr>
-                  ) : filteredRecords.map((record, idx) => (
+                  ) : pagedRecords.map((record, idx) => (
                     <tr key={record.id} className={idx % 2 === 0 ? 'bg-card' : 'bg-muted/30'}>
                       <td className="px-4 py-3 border-b border-border font-medium">{record.courier}</td>
                       <td className="px-4 py-3 border-b border-border text-sm">{record.fecha}</td>
@@ -420,7 +426,8 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div></div>
+            {!loading && !error && <ModulePagination page={page} totalItems={filteredRecords.length} onPageChange={setPage} />}
             {!loading && !error && (
               <p className="text-xs text-muted-foreground mt-2">{filteredRecords.length} registro(s) encontrado(s)</p>
             )}
@@ -431,7 +438,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
       {/* View modal */}
       {viewRecord && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border-2 border-border w-full max-w-md shadow-2xl">
+          <div className="bg-card border-2 border-border w-full max-w-2xl shadow-2xl">
             <div className="bg-muted px-5 py-4 flex items-center justify-between border-b-2 border-border">
               <h3 className="font-bold text-lg tracking-wide">DETALLE — {viewRecord.courier}</h3>
               <button onClick={() => setViewRecord(null)} className="hover:text-destructive transition-colors">

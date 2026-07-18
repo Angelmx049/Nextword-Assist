@@ -120,7 +120,7 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-primary text-foreground shadow-md">
+      <header className="module-header bg-primary text-foreground shadow-md">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -148,8 +148,8 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
         </div>
       </header>
 
-      <div className="px-6 py-4 bg-card border-b-2 border-border shadow-sm">
-        <div className="flex items-center justify-between">
+      <div className="py-4 bg-card border-b-2 border-border shadow-sm">
+        <div className="flex w-full items-center justify-between px-5">
           <div>
             <p className="text-lg">
               <span className="opacity-70">Usuario:</span>{' '}
@@ -167,18 +167,18 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
         </div>
       </div>
 
-      <main className="p-6">
+      <main className="module-page">
         <div className="mb-8">
           <h2 className="text-2xl mb-3">MÓDULOS DEL SISTEMA</h2>
           <div className="h-1 w-24 bg-primary shadow-sm"></div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7 xl:gap-8">
           {modules.map((module) => (
             <button
               key={module.id}
               onClick={() => onModuleSelect(module.id)}
-              className="bg-card border-2 border-border p-8 hover:border-primary hover:shadow-lg transition-all text-left group"
+              className="bg-card border-2 border-border p-8 lg:p-10 min-h-56 hover:border-primary hover:shadow-lg transition-all text-left group"
             >
               <div className="flex flex-col items-center text-center">
                 <module.icon className="w-16 h-16 mb-4 text-foreground group-hover:text-primary group-hover:scale-110 transition-all" />
@@ -189,7 +189,7 @@ export default function Dashboard({ username, role, onModuleSelect, onLogout }: 
           ))}
         </div>
 
-        <div className="mt-8 max-w-sm">
+        <div className="mt-8 w-full md:w-[calc(50%-0.875rem)] lg:w-[calc(33.333%-1.25rem)]">
           <div className="bg-card border-2 border-warning p-6 hover:shadow-lg transition-all">
             <p className="text-sm text-muted-foreground mb-2">Notificaciones sin leer</p>
             <p className={unreadCount === null ? 'text-base text-muted-foreground' : 'text-4xl'}>
