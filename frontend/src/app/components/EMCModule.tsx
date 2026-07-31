@@ -55,7 +55,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`w-full px-4 py-3 border-2 bg-input-background text-left flex items-center justify-between transition-colors ${open ? 'border-primary' : 'border-border hover:border-primary/60'}`}
+        className={`module-control w-full text-left flex items-center justify-between transition-colors ${open ? 'border-primary' : 'border-border hover:border-primary/60'}`}
       >
         <span className={value ? 'text-foreground' : 'text-muted-foreground'}>{displayValue}</span>
         <div className="flex items-center gap-1">
@@ -309,18 +309,24 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
             </div>
 
             <div className="module-filter-panel">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Filtrar por operador..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="module-control pl-10"
-                  />
+              <div className="module-filter-grid">
+                <div className="w-full">
+                  <label className="module-field-label">Operador</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Filtrar por operador..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="module-control module-search-control"
+                    />
+                  </div>
                 </div>
-                <DatePicker value={filterDate} onChange={setFilterDate} />
+                <div className="w-full">
+                  <label className="module-field-label">Fecha</label>
+                  <DatePicker value={filterDate} onChange={setFilterDate} />
+                </div>
               </div>
             </div>
 
