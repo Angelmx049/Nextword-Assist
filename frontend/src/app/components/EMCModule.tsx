@@ -162,6 +162,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
   const [page, setPage] = useState(1);
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const loadRequestIdRef = useRef(0);
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split('T')[0],
     hora: new Date().toTimeString().slice(0, 5),
@@ -173,15 +174,18 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
   const pagedRecords = records.slice((page - 1) * DEFAULT_PAGE_SIZE, page * DEFAULT_PAGE_SIZE);
 
   const loadRecords = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
     setLoading(true);
     setError('');
-    setRecords([]);
     try {
-      setRecords(await listMC({ operador: searchTerm, fecha: filterDate }));
+      const nextRecords = await listMC({ operador: searchTerm, fecha: filterDate });
+      if (requestId === loadRequestIdRef.current) setRecords(nextRecords);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No fue posible cargar los registros MC');
+      if (requestId === loadRequestIdRef.current) {
+        setError(err instanceof ApiError ? err.message : 'No fue posible cargar los registros MC');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestIdRef.current) setLoading(false);
     }
   }, [searchTerm, filterDate]);
 
