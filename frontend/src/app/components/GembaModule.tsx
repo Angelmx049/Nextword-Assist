@@ -38,6 +38,8 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
   const [error, setError] = useState('');
   const [operationPending, setOperationPending] = useState(false);
   const submitPendingRef = useRef(false);
+  const loadRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   const emptyForm = {
     fecha: new Date().toISOString().split('T')[0],
@@ -57,15 +59,21 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
   }), [filterCourier, filterFecha, filterEval]);
 
   const loadRecords = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
     setLoading(true);
     setError('');
-    setRecords([]);
     try { setRecords(await listGemba(currentFilters())); }
-    catch (err) { setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible cargar Gemba Ride'); }
-    finally { setLoading(false); }
+    catch (err) {
+      if (!isMountedRef.current || requestId !== loadRequestIdRef.current) return;
+      setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible cargar Gemba Ride');
+    }
+    finally {
+      if (isMountedRef.current && requestId === loadRequestIdRef.current) setLoading(false);
+    }
   }, [currentFilters]);
 
   useEffect(() => { void loadRecords(); }, [loadRecords]);
+  useEffect(() => () => { isMountedRef.current = false; }, []);
   useEffect(() => {
     listCouriers().then(setCouriers).catch(err => setError(err instanceof Error ? err.message : 'No fue posible cargar los couriers'));
   }, []);
