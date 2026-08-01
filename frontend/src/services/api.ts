@@ -8,6 +8,7 @@ interface ApiRequestOptions {
   headers?: HeadersInit;
   auth?: boolean;
   responseType?: 'json' | 'blob';
+  signal?: AbortSignal;
 }
 
 export class ApiError extends Error {
@@ -33,7 +34,7 @@ function defaultMessage(status: number): string {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, auth = true, headers: customHeaders, responseType = 'json' } = options;
+  const { method = 'GET', body, auth = true, headers: customHeaders, responseType = 'json', signal } = options;
   const headers = new Headers(customHeaders);
   const token = auth ? getToken() : null;
 
@@ -49,7 +50,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: requestBody });
+    response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: requestBody, signal });
   } catch {
     throw new ApiError(0, 'No fue posible conectar con el servidor');
   }

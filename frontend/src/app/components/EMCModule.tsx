@@ -267,7 +267,7 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `reporte_mc_${Date.now()}.docx`;
+      link.download = `reporte_mc_${new Date().toISOString().slice(0, 10)}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {

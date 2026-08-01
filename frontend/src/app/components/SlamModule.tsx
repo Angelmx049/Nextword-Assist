@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { ArrowLeft, ClipboardCheck, Download, Edit, Eye, FileText, OctagonX, Paperclip, Plus, Settings, Trash2, X } from 'lucide-react';
 import { ApiError } from '../../services/api';
+import ConfirmDialog from './ConfirmDialog';
 import { ModulePagination, DEFAULT_PAGE_SIZE } from './ConfirmDialog';
 import { createSlam, deleteSlam, exportSlam, listSlam, updateSlam, type SlamInput, type SlamRecord } from '../../services/slam';
 
@@ -17,6 +19,7 @@ const SLAM_STEPS = [
 const emptySteps = (): Record<StepKey, string> => ({ stop: '', look: '', assess: '', manage: '' });
 
 export default function SlamModule({ onBack, username }: SlamModuleProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [reports, setReports] = useState<SlamRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -26,11 +29,29 @@ export default function SlamModule({ onBack, username }: SlamModuleProps) {
   const [activeTab, setActiveTab] = useState<Record<number, 'detalle' | 'archivo'>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [operationPending, setOperationPending] = useState(false);
+  const [deleteReport, setDeleteReport] = useState<SlamRecord | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
   const [page, setPage] = useState(1);
   const pendingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedFileIdParam = searchParams.get('file');
+  const selectedFileId = selectedFileIdParam && /^\d+$/.test(selectedFileIdParam)
+    ? Number(selectedFileIdParam)
+    : null;
+  const selectedFileReport = selectedFileId
+    ? reports.find(report => report.id === selectedFileId) ?? null
+    : null;
+
+  const updateSlamUrl = (params: Record<string, string> = {}, replace = false) => {
+    const next = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) next.set(key, value);
+    });
+    setSearchParams(next, { replace });
+  };
 
   const loadReports = useCallback(async () => {
     setLoading(true); setError('');
@@ -47,14 +68,45 @@ export default function SlamModule({ onBack, username }: SlamModuleProps) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const closeInternalView = () => {
+    resetForm();
+    setShowHistory(false);
+    updateSlamUrl();
+  };
+
+  const openHistory = () => {
+    resetForm();
+    setShowHistory(true);
+    updateSlamUrl({ view: 'history' });
+  };
+
+  const selectReportTab = (reportId: number, tab: 'detalle' | 'archivo') => {
+    setActiveTab(prev => ({ ...prev, [reportId]: tab }));
+    updateSlamUrl(tab === 'archivo'
+      ? { view: 'history', tab: 'archivo', record: String(reportId) }
+      : { view: 'history' });
+  };
+
+  const openImageViewer = (report: SlamRecord) => {
+    setActiveTab(prev => ({ ...prev, [report.id]: 'archivo' }));
+    updateSlamUrl({ view: 'history', tab: 'archivo', file: String(report.id) });
+  };
+
+  const closeImageViewer = () => {
+    updateSlamUrl(selectedFileReport
+      ? { view: 'history', tab: 'archivo', record: String(selectedFileReport.id) }
+      : { view: 'history' }, true);
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (pendingRef.current) return;
     pendingRef.current = true; setOperationPending(true); setError('');
+    setSuccess('');
     try {
       const input: SlamInput = { ...formData, foto: archivo };
       if (editing) await updateSlam(editing.id, input); else await createSlam(input);
-      resetForm(); await loadReports();
+      resetForm(); setSuccess('Práctica SLAM guardada correctamente'); await loadReports();
     } catch (err) {
       setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible guardar la práctica SLAM');
     } finally { pendingRef.current = false; setOperationPending(false); }
@@ -65,17 +117,37 @@ export default function SlamModule({ onBack, username }: SlamModuleProps) {
     setArchivo(null); setEditing(report); setShowHistory(false); setShowForm(true);
   };
 
-  const handleDelete = async (report: SlamRecord) => {
-    if (pendingRef.current || !window.confirm('¿Eliminar esta práctica SLAM?')) return;
+  const requestDelete = (report: SlamRecord) => {
+    if (operationPending) return;
+    setDeleteReport(report);
+    setShowConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (pendingRef.current || operationPending || !deleteReport) return;
     pendingRef.current = true; setOperationPending(true); setError('');
-    try { await deleteSlam(report.id); await loadReports(); }
+    setSuccess('');
+    try {
+      await deleteSlam(deleteReport.id);
+      setShowConfirm(false);
+      setDeleteReport(null);
+      setSuccess('Práctica SLAM eliminada correctamente');
+      await loadReports();
+    }
     catch (err) { setError(err instanceof ApiError ? err.message : 'No fue posible eliminar la práctica SLAM'); }
     finally { pendingRef.current = false; setOperationPending(false); }
+  };
+
+  const cancelDelete = () => {
+    if (operationPending) return;
+    setShowConfirm(false);
+    setDeleteReport(null);
   };
 
   const handleExport = async () => {
     if (pendingRef.current) return;
     pendingRef.current = true; setOperationPending(true); setError('');
+    setSuccess('');
     try {
       const blob = await exportSlam();
       const url = URL.createObjectURL(blob);
@@ -88,26 +160,71 @@ export default function SlamModule({ onBack, username }: SlamModuleProps) {
       setError(err instanceof ApiError ? err.message : 'No fue posible exportar el archivo Excel');
     } finally { pendingRef.current = false; setOperationPending(false); }
   };
+
+  const handleImageDownload = async (report: SlamRecord) => {
+    if (pendingRef.current || !report.archivoUrl) return;
+    pendingRef.current = true; setOperationPending(true); setError('');
+    setSuccess('');
+    try {
+      const response = await fetch(report.archivoUrl);
+      if (!response.ok) throw new Error('No fue posible descargar la imagen');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = report.archivo || `slam-${report.id}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('No fue posible descargar la imagen SLAM');
+    } finally { pendingRef.current = false; setOperationPending(false); }
+  };
   const pagedReports = reports.slice((page - 1) * DEFAULT_PAGE_SIZE, page * DEFAULT_PAGE_SIZE);
   useEffect(() => { if (!showHistory) setPage(1); }, [showHistory]);
+  useEffect(() => {
+    const view = searchParams.get('view');
+    const tab = searchParams.get('tab');
+    const recordIdParam = searchParams.get('record') ?? searchParams.get('file');
+    const recordId = recordIdParam && /^\d+$/.test(recordIdParam) ? Number(recordIdParam) : null;
+
+    if (view === 'history') {
+      setShowForm(false);
+      setEditing(null);
+      setShowHistory(true);
+      if (tab === 'archivo' && recordId) {
+        setActiveTab(prev => ({ ...prev, [recordId]: 'archivo' }));
+      }
+    } else if (!showForm) {
+      setShowHistory(false);
+    }
+  }, [searchParams, showForm]);
+
+  useEffect(() => {
+    const targetIdParam = searchParams.get('record') ?? searchParams.get('file');
+    const targetId = targetIdParam && /^\d+$/.test(targetIdParam) ? Number(targetIdParam) : null;
+    if (!targetId || reports.length === 0) return;
+    const index = reports.findIndex(report => report.id === targetId);
+    if (index >= 0) setPage(Math.floor(index / DEFAULT_PAGE_SIZE) + 1);
+  }, [reports, searchParams]);
 
   return (
     <div className="min-h-screen bg-background">
       <header className="module-header bg-primary text-foreground py-4 shadow-md">
         <div className="flex items-center gap-4">
-          <button onClick={showForm || showHistory ? () => { resetForm(); setShowHistory(false); } : onBack} className="hover:opacity-70 transition-opacity"><ArrowLeft className="w-8 h-8" /></button>
+          <button onClick={showForm || showHistory ? closeInternalView : onBack} className="hover:opacity-70 transition-opacity"><ArrowLeft className="w-8 h-8" /></button>
           <div><h1 className="text-3xl tracking-wider font-bold">SLAM</h1><p className="text-sm opacity-80">Stop · Look · Assess · Manage</p></div>
         </div>
       </header>
 
       <main className="module-page">
         {error && <div className="mb-4 border-2 border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+        {success && <div className="mb-4 border-2 border-primary bg-primary/10 p-3 text-sm font-bold text-foreground">{success}</div>}
         {loading && <div className="mb-4 text-sm text-muted-foreground">Cargando prácticas SLAM...</div>}
 
         {!showForm && !showHistory && <>
           <div className="mb-6 flex flex-wrap gap-3">
             <button onClick={() => setShowForm(true)} className="bg-destructive text-destructive-foreground px-5 py-3 border-2 border-destructive hover:bg-destructive/90 transition-colors flex items-center gap-2 font-bold tracking-wide"><Plus className="w-5 h-5" />NUEVA PRÁCTICA</button>
-            <button onClick={() => setShowHistory(true)} className="bg-secondary text-secondary-foreground px-5 py-3 border-2 border-secondary hover:bg-secondary/90 transition-colors flex items-center gap-2 font-bold tracking-wide"><FileText className="w-5 h-5" />HISTORIAL</button>
+            <button onClick={openHistory} className="bg-secondary text-secondary-foreground px-5 py-3 border-2 border-secondary hover:bg-secondary/90 transition-colors flex items-center gap-2 font-bold tracking-wide"><FileText className="w-5 h-5" />HISTORIAL</button>
             <button onClick={() => void handleExport()} disabled={operationPending} className="bg-card text-foreground px-5 py-3 border-2 border-border hover:border-primary transition-colors flex items-center gap-2 font-bold tracking-wide disabled:opacity-50"><Download className="w-5 h-5" />EXPORTAR A EXCEL</button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -132,15 +249,37 @@ export default function SlamModule({ onBack, username }: SlamModuleProps) {
         </div>}
 
         {showHistory && <>
-          <div className="mb-6 flex items-center justify-between"><div className="flex items-center gap-3"><button onClick={() => setShowHistory(false)} className="hover:opacity-70"><ArrowLeft className="w-6 h-6" /></button><h2 className="text-2xl font-bold tracking-wide">HISTORIAL DE PRÁCTICAS</h2></div><span className="text-muted-foreground text-sm">{loading ? 'Cargando...' : error ? 'Sin datos' : `${reports.length} registro(s)`}</span></div>
+          <div className="mb-6 flex items-center justify-between"><div className="flex items-center gap-3"><button onClick={closeInternalView} className="hover:opacity-70"><ArrowLeft className="w-6 h-6" /></button><h2 className="text-2xl font-bold tracking-wide">HISTORIAL DE PRÁCTICAS</h2></div><span className="text-muted-foreground text-sm">{loading ? 'Cargando...' : error ? 'Sin datos' : `${reports.length} registro(s)`}</span></div>
           {!loading && !error && reports.length === 0 && <div className="py-12 text-center text-muted-foreground">Sin prácticas registradas</div>}
           <div className="space-y-4">{!loading && !error && pagedReports.map(report => { const tab = activeTab[report.id] ?? 'detalle'; return <div key={report.id} className="bg-card border-2 border-border overflow-hidden rounded">
-            <div className="bg-muted px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b-2 border-border"><div className="font-bold text-lg tracking-wide">{report.nombre}</div><div className="flex items-center gap-3 text-sm text-muted-foreground"><span>{report.fecha}</span><span>{report.hora}</span><button onClick={() => startEdit(report)} disabled={operationPending} className="p-1 hover:text-primary" title="Editar"><Edit className="w-4 h-4" /></button><button onClick={() => void handleDelete(report)} disabled={operationPending} className="p-1 hover:text-destructive" title="Eliminar"><Trash2 className="w-4 h-4" /></button></div></div>
-            <div className="flex border-b-2 border-border"><button onClick={() => setActiveTab(prev => ({ ...prev, [report.id]: 'detalle' }))} className={`flex-1 py-2 text-sm font-bold tracking-wide ${tab === 'detalle' ? 'bg-card border-b-2 border-primary' : 'bg-muted text-muted-foreground'}`}>DETALLE</button><button onClick={() => setActiveTab(prev => ({ ...prev, [report.id]: 'archivo' }))} className={`flex-1 py-2 text-sm font-bold tracking-wide flex items-center justify-center gap-2 ${tab === 'archivo' ? 'bg-card border-b-2 border-primary' : 'bg-muted text-muted-foreground'}`}><Paperclip className="w-4 h-4" />ARCHIVO<span className="w-2 h-2 rounded-full bg-primary" /></button></div>
-            {tab === 'detalle' ? <div className="grid grid-cols-1 md:grid-cols-2">{SLAM_STEPS.map((step, index) => { const Icon = step.icon; return <div key={step.key} className={`p-4 border-border ${index < 2 ? 'border-b-2' : ''} ${index % 2 === 0 ? 'md:border-r-2' : ''}`}><div className="flex items-center gap-2 mb-2"><div className={`${step.iconBg} text-background p-1`}><Icon className="w-4 h-4" /></div><span className="font-bold text-sm tracking-wider">{step.label}</span><span className="text-xs text-muted-foreground">({step.sublabel})</span></div><p className="text-sm text-muted-foreground leading-snug">{report[step.key]}</p></div>; })}</div> : report.archivoUrl && !failedImages[report.id] ? <div className="p-5 space-y-3"><div className="flex items-center gap-2 text-sm font-medium"><Paperclip className="w-4 h-4 text-primary" /><span className="truncate">{report.archivo}</span></div><img src={report.archivoUrl} alt={report.archivo} onError={() => setFailedImages(prev => ({ ...prev, [report.id]: true }))} className="w-full max-h-72 object-contain border-2 border-border bg-muted" /><a href={report.archivoUrl} download={report.archivo} className="flex items-center justify-center gap-2 w-full py-2 border-2 border-border hover:border-primary bg-card text-sm font-bold tracking-wide"><Download className="w-4 h-4" />DESCARGAR</a></div> : <div className="p-8 text-center text-sm text-muted-foreground">{report.archivoUrl ? 'La imagen no está disponible' : 'No se adjuntó ningún archivo en esta práctica'}</div>}
+            <div className="bg-muted px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b-2 border-border"><div className="font-bold text-lg tracking-wide">{report.nombre}</div><div className="flex items-center gap-3 text-sm text-muted-foreground"><span>{report.fecha}</span><span>{report.hora}</span><button onClick={() => startEdit(report)} disabled={operationPending} className="p-1 hover:text-primary" title="Editar"><Edit className="w-4 h-4" /></button><button onClick={() => requestDelete(report)} disabled={operationPending} className="p-1 hover:text-destructive disabled:opacity-50" title="Eliminar"><Trash2 className="w-4 h-4" /></button></div></div>
+            <div className="flex border-b-2 border-border"><button onClick={() => selectReportTab(report.id, 'detalle')} className={`flex-1 py-2 text-sm font-bold tracking-wide ${tab === 'detalle' ? 'bg-card border-b-2 border-primary' : 'bg-muted text-muted-foreground'}`}>DETALLE</button><button onClick={() => selectReportTab(report.id, 'archivo')} className={`flex-1 py-2 text-sm font-bold tracking-wide flex items-center justify-center gap-2 ${tab === 'archivo' ? 'bg-card border-b-2 border-primary' : 'bg-muted text-muted-foreground'}`}><Paperclip className="w-4 h-4" />ARCHIVO<span className="w-2 h-2 rounded-full bg-primary" /></button></div>
+            {tab === 'detalle' ? <div className="grid grid-cols-1 md:grid-cols-2">{SLAM_STEPS.map((step, index) => { const Icon = step.icon; return <div key={step.key} className={`p-4 border-border ${index < 2 ? 'border-b-2' : ''} ${index % 2 === 0 ? 'md:border-r-2' : ''}`}><div className="flex items-center gap-2 mb-2"><div className={`${step.iconBg} text-background p-1`}><Icon className="w-4 h-4" /></div><span className="font-bold text-sm tracking-wider">{step.label}</span><span className="text-xs text-muted-foreground">({step.sublabel})</span></div><p className="text-sm text-muted-foreground leading-snug">{report[step.key]}</p></div>; })}</div> : report.archivoUrl && !failedImages[report.id] ? <div className="p-5 space-y-3"><div className="flex items-center gap-2 text-sm font-medium"><Paperclip className="w-4 h-4 text-primary" /><span className="truncate">{report.archivo}</span></div><div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => openImageViewer(report)} className="flex items-center justify-center gap-2 flex-1 py-2 border-2 border-primary bg-primary text-primary-foreground text-sm font-bold tracking-wide hover:bg-primary/90"><Eye className="w-4 h-4" />VER IMAGEN</button><button type="button" onClick={() => void handleImageDownload(report)} disabled={operationPending} className="flex items-center justify-center gap-2 flex-1 py-2 border-2 border-border hover:border-primary bg-card text-sm font-bold tracking-wide disabled:opacity-50"><Download className="w-4 h-4" />DESCARGAR</button></div><button type="button" onClick={() => openImageViewer(report)} className="block w-full border-2 border-border bg-muted hover:border-primary"><img src={report.archivoUrl} alt={report.archivo} onError={() => setFailedImages(prev => ({ ...prev, [report.id]: true }))} className="w-full max-h-72 object-contain" /></button></div> : <div className="p-8 text-center text-sm text-muted-foreground">{report.archivoUrl ? 'La imagen no está disponible' : 'No se adjuntó ningún archivo en esta práctica'}</div>}
           </div>; })}</div><ModulePagination page={page} totalItems={reports.length} onPageChange={setPage} />
         </>}
       </main>
+      {selectedFileReport && showHistory && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex flex-col" role="dialog" aria-modal="true" aria-label="Imagen SLAM ampliada" onMouseDown={closeImageViewer}>
+          <div className="flex items-center justify-between gap-3 bg-card border-b-2 border-border p-3" onMouseDown={event => event.stopPropagation()}>
+            <button type="button" onClick={closeImageViewer} className="flex items-center gap-2 border-2 border-border px-3 py-2 text-sm font-bold tracking-wide hover:border-primary"><ArrowLeft className="w-4 h-4" />VOLVER AL ARCHIVO</button>
+            <div className="min-w-0 text-center">
+              <p className="truncate text-sm font-bold">{selectedFileReport.archivo}</p>
+              <p className="text-xs text-muted-foreground">{selectedFileReport.fecha} {selectedFileReport.hora}</p>
+            </div>
+            <div className="w-[196px]" aria-hidden="true" />
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center p-4" onMouseDown={event => event.stopPropagation()}>
+            <img src={selectedFileReport.archivoUrl} alt={selectedFileReport.archivo} className="max-h-full max-w-full object-contain" onError={() => setFailedImages(prev => ({ ...prev, [selectedFileReport.id]: true }))} />
+          </div>
+        </div>
+      )}
+      <ConfirmDialog
+        isOpen={showConfirm}
+        title="CONFIRMAR ELIMINACIÓN"
+        message={`¿Está seguro de que desea eliminar esta práctica SLAM? Esta acción no se puede deshacer.${deleteReport ? ` Archivo: ${deleteReport.archivo}` : ''}`}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 }
