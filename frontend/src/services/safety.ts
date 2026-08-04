@@ -84,8 +84,8 @@ export function createSafetyFinding(areaId: number, descripcion: string, risk: S
   });
 }
 
-export const loadSafetyEvidence = (path: string) =>
-  apiRequest<Blob>(path, { responseType: 'blob' });
+export const loadSafetyEvidence = (path: string, signal?: AbortSignal) =>
+  apiRequest<Blob>(path, { responseType: 'blob', signal });
 
 export const exportSafetyHistory = (areaId: number, filters: SafetyFilters) =>
   apiRequest<Blob>(`/api/safety/areas/${areaId}/hallazgos/exportar/excel${query(filters)}`, {

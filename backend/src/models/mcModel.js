@@ -94,6 +94,21 @@ const existe = async (id) => {
   return registros.length > 0;
 };
 
+const obtenerPropietario = async (id) => {
+  const [registros] = await db.query(
+    `
+    SELECT
+      id_mc,
+      creado_por
+    FROM mc_marcaciones
+    WHERE id_mc = ?
+    LIMIT 1
+    `,
+    [id]
+  );
+  return registros[0] || null;
+};
+
 const actualizar = async (id, { fecha, hora, mc, operador, observaciones }) => {
   await db.query(
     `
@@ -145,6 +160,7 @@ module.exports = {
   obtenerPorId,
   crear,
   existe,
+  obtenerPropietario,
   actualizar,
   eliminar,
   listarParaExportar

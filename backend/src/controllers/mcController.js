@@ -9,6 +9,8 @@ const obtenerIdUsuario = (req) => (
   null
 );
 
+const obtenerRolUsuario = (req) => req.usuario?.rol || req.user?.rol || null;
+
 const enviarErrorServicio = (res, error) => res.status(error.status).json({
   ok: false,
   mensaje: error.mensaje
@@ -75,7 +77,9 @@ const actualizarRegistroMC = async (req, res) => {
   try {
     const resultado = await mcService.actualizar(
       req.params.id,
-      mcRequestDto(req.body)
+      mcRequestDto(req.body),
+      obtenerIdUsuario(req),
+      obtenerRolUsuario(req)
     );
     if (resultado.error) return enviarErrorServicio(res, resultado.error);
     return res.status(200).json({
@@ -94,7 +98,11 @@ const actualizarRegistroMC = async (req, res) => {
 
 const eliminarRegistroMC = async (req, res) => {
   try {
-    const resultado = await mcService.eliminar(req.params.id);
+    const resultado = await mcService.eliminar(
+      req.params.id,
+      obtenerIdUsuario(req),
+      obtenerRolUsuario(req)
+    );
     if (resultado.error) return enviarErrorServicio(res, resultado.error);
     return res.status(200).json({
       ok: true,
@@ -119,7 +127,7 @@ const exportarRegistrosMC = async (req, res) => {
 
     res.setHeader(
       'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
     res.setHeader(
       'Content-Disposition',
