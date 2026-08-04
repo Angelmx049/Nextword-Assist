@@ -39,7 +39,7 @@ const obtenerArea = async (idArea, connection = db, bloquear = false) => {
 
 const listarRecientes = async (idArea) => {
   const [hallazgos] = await db.query(
-    consultaHallazgos('WHERE h.id_area = ?', 'LIMIT 10'),
+    consultaHallazgos('WHERE h.id_area = ?', 'LIMIT 5'),
     [idArea]
   );
   return hallazgos;

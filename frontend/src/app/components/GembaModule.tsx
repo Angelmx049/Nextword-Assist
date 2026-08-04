@@ -32,12 +32,15 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
   const [filterEval, setFilterEval] = useState('');
   const [page, setPage] = useState(1);
 
+  const [allRecords, setAllRecords] = useState<GembaRecord[]>([]);
   const [records, setRecords] = useState<GembaRecord[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState('');
   const [operationPending, setOperationPending] = useState(false);
   const submitPendingRef = useRef(false);
+  const allRecordsRequestIdRef = useRef(0);
   const loadRequestIdRef = useRef(0);
   const isMountedRef = useRef(true);
 
@@ -58,20 +61,39 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
     evaluacion: (filterEval || undefined) as EvaluacionView | undefined,
   }), [filterCourier, filterFecha, filterEval]);
 
-  const loadRecords = useCallback(async () => {
-    const requestId = ++loadRequestIdRef.current;
+  const loadAllRecords = useCallback(async () => {
+    const requestId = ++allRecordsRequestIdRef.current;
     setLoading(true);
     setError('');
-    try { setRecords(await listGemba(currentFilters())); }
+    try {
+      const nextRecords = await listGemba();
+      if (isMountedRef.current && requestId === allRecordsRequestIdRef.current) setAllRecords(nextRecords);
+    } catch (err) {
+      if (!isMountedRef.current || requestId !== allRecordsRequestIdRef.current) return;
+      setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible cargar Gemba Ride');
+    } finally {
+      if (isMountedRef.current && requestId === allRecordsRequestIdRef.current) setLoading(false);
+    }
+  }, []);
+
+  const loadRecords = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
+    setHistoryLoading(true);
+    setError('');
+    try {
+      const nextRecords = await listGemba(currentFilters());
+      if (isMountedRef.current && requestId === loadRequestIdRef.current) setRecords(nextRecords);
+    }
     catch (err) {
       if (!isMountedRef.current || requestId !== loadRequestIdRef.current) return;
       setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible cargar Gemba Ride');
     }
     finally {
-      if (isMountedRef.current && requestId === loadRequestIdRef.current) setLoading(false);
+      if (isMountedRef.current && requestId === loadRequestIdRef.current) setHistoryLoading(false);
     }
   }, [currentFilters]);
 
+  useEffect(() => { void loadAllRecords(); }, [loadAllRecords]);
   useEffect(() => { void loadRecords(); }, [loadRecords]);
   useEffect(() => () => { isMountedRef.current = false; }, []);
   useEffect(() => {
@@ -112,7 +134,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
       const input = { ...formData, idCourier: selectedCourier, evaluacion: formData.evaluacion as EvaluacionView };
       if (editingId) await updateGemba(editingId, input); else await createGemba(input);
       resetForm();
-      await loadRecords();
+      await Promise.all([loadAllRecords(), loadRecords()]);
     } catch (err) { setError(err instanceof ApiError || err instanceof TypeError ? err.message : 'No fue posible guardar la evaluación'); }
     finally {
       submitPendingRef.current = false;
@@ -136,7 +158,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
     if (!deleteId || operationPending) return;
     setOperationPending(true);
     setError('');
-    try { await deleteGemba(deleteId); setShowConfirm(false); setDeleteId(null); await loadRecords(); }
+    try { await deleteGemba(deleteId); setShowConfirm(false); setDeleteId(null); await Promise.all([loadAllRecords(), loadRecords()]); }
     catch (err) { setError(err instanceof ApiError ? err.message : 'No fue posible eliminar la evaluación'); }
     finally { setOperationPending(false); }
   };
@@ -179,7 +201,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
 
       <main className="module-page">
         {error && <div className="mb-4 border-2 border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-        {loading && <div className="mb-4 text-sm text-muted-foreground">Cargando datos de Gemba Ride...</div>}
+        {loading && !showHistory && <div className="mb-4 text-sm text-muted-foreground">Cargando datos de Gemba Ride...</div>}
 
         {/* Main menu */}
         {!showForm && !showHistory && (
@@ -189,7 +211,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
               {couriers.map((courier) => {
-                const count = records.filter(r => r.idCourier === courier.id).length;
+                const count = allRecords.filter(r => r.idCourier === courier.id).length;
                 return (
                   <button
                     key={courier.id}
@@ -334,41 +356,32 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
             </div>
 
             {/* Filters */}
-            <div className="module-filter-panel module-filter-grid">
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Courier</label>
-                <select value={filterCourier} onChange={(e) => setFilterCourier(e.target.value)}
-                  className="module-control">
-                  <option value="">Todos</option>
-                  {couriers.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+            <div className="mb-5 rounded border-2 border-border bg-card p-4 shadow-sm md:p-5">
+              <h3 className="mb-4 text-sm font-bold tracking-wide">FILTRAR REGISTROS</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="block text-xs font-bold uppercase text-muted-foreground">Courier
+                  <select value={filterCourier} onChange={e => setFilterCourier(e.target.value)} className="mt-1.5 h-11 w-full rounded border-2 border-border bg-background px-3 text-foreground outline-none focus:border-primary">
+                    <option value="">Todos</option>
+                    {couriers.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </label>
+                <label className="block text-xs font-bold uppercase text-muted-foreground">Fecha
+                  <input type="date" value={filterFecha} onChange={e => setFilterFecha(e.target.value)} className="mt-1.5 h-11 w-full rounded border-2 border-border bg-background px-3 text-foreground outline-none focus:border-primary" />
+                </label>
+                <label className="block text-xs font-bold uppercase text-muted-foreground">Evaluación
+                  <select value={filterEval} onChange={e => setFilterEval(e.target.value)} className="mt-1.5 h-11 w-full rounded border-2 border-border bg-background px-3 text-foreground outline-none focus:border-primary">
+                    <option value="">Todas</option>
+                    <option value="Excelente">Excelente</option>
+                    <option value="Bueno">Bueno</option>
+                    <option value="Regular">Regular</option>
+                    <option value="Necesita Mejora">Necesita Mejora</option>
+                  </select>
+                </label>
               </div>
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Fecha</label>
-                <input type="date" value={filterFecha} onChange={(e) => setFilterFecha(e.target.value)}
-                  className="module-control" />
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <button type="button" onClick={() => setPage(1)} className="min-h-11 rounded border-2 border-primary bg-primary px-5 py-2 font-bold tracking-wide hover:bg-primary/90 sm:w-auto">FILTRAR</button>
+                <button type="button" onClick={() => { setFilterCourier(''); setFilterFecha(''); setFilterEval(''); setPage(1); }} className="min-h-11 rounded border-2 border-border bg-background px-5 py-2 font-bold tracking-wide hover:border-primary sm:w-auto">LIMPIAR FILTROS</button>
               </div>
-              <div>
-                <label className="block text-xs font-bold uppercase text-muted-foreground mb-1">Evaluación</label>
-                <select value={filterEval} onChange={(e) => setFilterEval(e.target.value)}
-                  className="module-control">
-                  <option value="">Todas</option>
-                  <option value="Excelente">Excelente</option>
-                  <option value="Bueno">Bueno</option>
-                  <option value="Regular">Regular</option>
-                  <option value="Necesita Mejora">Necesita Mejora</option>
-                </select>
-              </div>
-              {(filterCourier || filterFecha || filterEval) && (
-                <div className="md:col-span-3 flex justify-end">
-                  <button
-                    onClick={() => { setFilterCourier(''); setFilterFecha(''); setFilterEval(''); }}
-                    className="module-button bg-card border-border text-foreground hover:border-primary"
-                  >
-                    <X className="w-3 h-3" /> Limpiar filtros
-                  </button>
-                </div>
-              )}
             </div>
 
             <div className="module-table-shell"><div className="module-table-scroll">
@@ -386,7 +399,7 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {!loading && !error && filteredRecords.length === 0 ? (
+                  {!historyLoading && !error && filteredRecords.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron registros</td>
                     </tr>
@@ -435,8 +448,8 @@ export default function GembaModule({ onBack, role }: GembaModuleProps) {
                 </tbody>
               </table>
             </div></div>
-            {!loading && !error && <ModulePagination page={page} totalItems={filteredRecords.length} onPageChange={setPage} />}
-            {!loading && !error && (
+            {!historyLoading && !error && <ModulePagination page={page} totalItems={filteredRecords.length} onPageChange={setPage} />}
+            {!historyLoading && !error && (
               <p className="text-xs text-muted-foreground mt-2">{filteredRecords.length} registro(s) encontrado(s)</p>
             )}
           </>

@@ -57,6 +57,14 @@ function getMinutesRemaining(task: Task): number {
   return Math.floor((deadline - Date.now()) / 60000);
 }
 
+function formatHoursRemaining(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) return `${remainingMinutes} min restantes`;
+  if (remainingMinutes === 0) return `${hours} h restantes`;
+  return `${hours} h ${remainingMinutes} min restantes`;
+}
+
 function getCardBorder(task: Task): string {
   if (!ACTIVE_STATES.includes(task.estado)) return 'border-border';
   const mins = getMinutesRemaining(task);
@@ -114,6 +122,10 @@ function TaskFormModal({ initial, administrators, onSave, onClose, isEdit }: Tas
     horaLimite: initial?.horaLimite || '',
     prioridad: (initial?.prioridad || 'media') as Priority,
   });
+  const [deadlineHour = '', deadlineMinute = ''] = form.horaLimite.split(':');
+  const updateDeadlineTime = (hour: string, minute: string) => {
+    setForm({ ...form, horaLimite: `${hour}:${minute}` });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,8 +161,19 @@ function TaskFormModal({ initial, administrators, onSave, onClose, isEdit }: Tas
           </div>
           <div>
             <label className="block text-xs font-bold mb-1">HORA LÍMITE <span className="text-red-600">*</span></label>
-            <input type="time" value={form.horaLimite} onChange={e => setForm({ ...form, horaLimite: e.target.value })}
-              className="w-full px-3 py-2 border-2 border-border bg-background focus:outline-none focus:border-primary text-sm rounded" required />
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <select aria-label="Hora límite, hora" value={deadlineHour} onChange={e => updateDeadlineTime(e.target.value, deadlineMinute)}
+                className="w-full px-3 py-2 border-2 border-border bg-background focus:outline-none focus:border-primary text-sm rounded" required>
+                <option value="">Hora</option>
+                {Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0')).map(hour => <option key={hour} value={hour}>{hour}</option>)}
+              </select>
+              <span className="font-bold" aria-hidden="true">:</span>
+              <select aria-label="Hora límite, minutos" value={deadlineMinute} onChange={e => updateDeadlineTime(deadlineHour, e.target.value)}
+                className="w-full px-3 py-2 border-2 border-border bg-background focus:outline-none focus:border-primary text-sm rounded" required>
+                <option value="">Minutos</option>
+                {Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, '0')).map(minute => <option key={minute} value={minute}>{minute}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <div>
@@ -352,7 +375,7 @@ function TimeRemaining({ task }: { task: Task }) {
     <span className={`flex items-center gap-1 text-xs font-bold ${color}`}>
       {showBell && <Bell className="w-3 h-3 animate-pulse" />}
       <Clock className="w-3 h-3" />
-      {mins <= 0 ? 'VENCIDA' : `${mins} min restantes`}
+      {mins <= 0 ? 'VENCIDA' : formatHoursRemaining(mins)}
     </span>
   );
 }
@@ -650,7 +673,8 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
     if (tab === 'historial' && !inHistory) return false;
     return true;
   });
-  const pagedTasks = filteredTasks.slice((page - 1) * DEFAULT_PAGE_SIZE, page * DEFAULT_PAGE_SIZE);
+  const pageSize = tab === 'historial' ? 4 : 5;
+  const pagedTasks = filteredTasks.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => { setPage(1); }, [filters, tab]);
 
   const activeCount = tasks.filter(t => ACTIVE_STATES.includes(t.estado)).length;
@@ -737,7 +761,7 @@ export default function ChecklistModule({ onBack, role, username }: ChecklistMod
             ))
           )}
         </div>
-        {!loading && !error && <ModulePagination page={page} totalItems={filteredTasks.length} onPageChange={setPage} />}
+        {!loading && !error && <ModulePagination page={page} totalItems={filteredTasks.length} pageSize={pageSize} onPageChange={setPage} />}
       </main>
 
       {/* Modals */}

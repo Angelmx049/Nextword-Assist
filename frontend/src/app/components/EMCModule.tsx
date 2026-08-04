@@ -312,25 +312,19 @@ export default function EMCModule({ onBack, username }: EMCModuleProps) {
               </button>
             </div>
 
-            <div className="module-filter-panel">
-              <div className="module-filter-grid">
-                <div className="w-full">
-                  <label className="module-field-label">Operador</label>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Filtrar por operador..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="module-control module-search-control"
-                    />
-                  </div>
-                </div>
-                <div className="w-full">
-                  <label className="module-field-label">Fecha</label>
-                  <DatePicker value={filterDate} onChange={setFilterDate} />
-                </div>
+            <div className="mb-5 rounded border-2 border-border bg-card p-4 shadow-sm md:p-5">
+              <h3 className="mb-4 text-sm font-bold tracking-wide">FILTRAR REGISTROS</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block text-xs font-bold uppercase text-muted-foreground">Fecha
+                  <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="mt-1.5 h-11 w-full rounded border-2 border-border bg-background px-3 text-foreground outline-none focus:border-primary" />
+                </label>
+                <label className="block text-xs font-bold uppercase text-muted-foreground">Operador
+                  <input type="search" placeholder="Nombre del operador" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="mt-1.5 h-11 w-full rounded border-2 border-border bg-background px-3 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary" />
+                </label>
+              </div>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <button type="button" onClick={() => { setPage(1); void loadRecords(); }} className="min-h-11 rounded border-2 border-primary bg-primary px-5 py-2 font-bold tracking-wide hover:bg-primary/90 sm:w-auto">FILTRAR</button>
+                <button type="button" onClick={() => { setSearchTerm(''); setFilterDate(''); setPage(1); }} className="min-h-11 rounded border-2 border-border bg-background px-5 py-2 font-bold tracking-wide hover:border-primary sm:w-auto">LIMPIAR FILTROS</button>
               </div>
             </div>
 

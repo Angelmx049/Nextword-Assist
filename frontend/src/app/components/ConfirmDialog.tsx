@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 
-export const DEFAULT_PAGE_SIZE = 10;
+export const DEFAULT_PAGE_SIZE = 8;
 
 interface PaginationProps { page: number; totalItems: number; pageSize?: number; onPageChange: (page: number) => void }
 

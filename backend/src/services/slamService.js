@@ -90,7 +90,6 @@ const exportar = async () => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('SLAM');
   worksheet.columns = [
-    { header: 'ID', key: 'id_slam', width: 10 },
     { header: 'Fecha', key: 'fecha', width: 14 },
     { header: 'Hora', key: 'hora', width: 12 },
     { header: 'STOP', key: 'stop', width: 35 },
@@ -101,7 +100,7 @@ const exportar = async () => {
   ];
   practicas.forEach((practica) => worksheet.addRow(practica));
   worksheet.getRow(1).font = { bold: true };
-  worksheet.autoFilter = { from: 'A1', to: 'H1' };
+  worksheet.autoFilter = { from: 'A1', to: 'G1' };
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
   return workbook;
 };

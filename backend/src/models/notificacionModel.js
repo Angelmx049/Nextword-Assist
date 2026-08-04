@@ -62,6 +62,26 @@ const cancelarAlertasVencimiento = async (connection, idTarea) => {
   );
 };
 
+const crearNotificacionAsignacion = async (
+  connection,
+  { idTarea, destinatarioId, titulo }
+) => {
+  await connection.query(
+    `INSERT INTO notificaciones (
+       id_tarea, destinatario_id, tipo, mensaje, fecha_programada,
+       estado, leida, evento_origen, clave_idempotencia
+     ) VALUES (?, ?, 'TAREA_ENTREGADA', ?, NOW(),
+               'Programada', 0, 'Entrega', ?)
+     ON DUPLICATE KEY UPDATE clave_idempotencia = clave_idempotencia`,
+    [
+      idTarea,
+      destinatarioId,
+      `Se te asignó la tarea “${titulo}”.`,
+      `asignacion:${idTarea}:${destinatarioId}`
+    ]
+  );
+};
+
 const crearNotificacionEntrega = async (
   connection,
   { idTarea, idEntrega, destinatarioId, titulo, esReentrega }
@@ -179,5 +199,6 @@ module.exports = {
   crearAlertasVencimiento,
   obtenerSiguienteVersionVencimiento,
   cancelarAlertasVencimiento,
+  crearNotificacionAsignacion,
   crearNotificacionEntrega
 };

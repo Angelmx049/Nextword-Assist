@@ -214,7 +214,6 @@ const exportar = async (filtros) => {
   workbook.created = new Date();
   const worksheet = workbook.addWorksheet('GEMBA RIDE');
   worksheet.columns = [
-    { header: 'ID', key: 'id_gemba', width: 10 },
     { header: 'Courier', key: 'courier', width: 18 },
     { header: 'Fecha', key: 'fecha', width: 15 },
     { header: 'Hora', key: 'hora', width: 12 },
@@ -227,7 +226,6 @@ const exportar = async (filtros) => {
   ];
   resultados.forEach((registro) => {
     worksheet.addRow({
-      id_gemba: registro.id_gemba,
       courier: registro.courier,
       fecha: registro.fecha,
       hora: registro.hora,
@@ -240,7 +238,7 @@ const exportar = async (filtros) => {
     });
   });
   worksheet.getRow(1).font = { bold: true };
-  worksheet.autoFilter = { from: 'A1', to: 'J1' };
+  worksheet.autoFilter = { from: 'A1', to: 'I1' };
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
   return {

@@ -4,6 +4,7 @@ const {
   crearAlertasVencimiento,
   obtenerSiguienteVersionVencimiento,
   cancelarAlertasVencimiento,
+  crearNotificacionAsignacion,
   crearNotificacionEntrega
 } = require('../models/notificacionModel');
 
@@ -87,6 +88,11 @@ const crearTarea = async (datos, idUsuario) => {
       estadoNuevo: 'Pendiente',
       comentario: 'Tarea creada y asignada',
       actualizadoPor: idUsuario
+    });
+    await crearNotificacionAsignacion(connection, {
+      idTarea,
+      destinatarioId: datos.asignada_a,
+      titulo: datos.titulo.trim()
     });
     await crearAlertasTarea(
       connection,
@@ -529,7 +535,6 @@ const exportarExcel = async (filtros, rol, idUsuario) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Checklist');
   worksheet.columns = [
-    { header: 'ID', key: 'id_tarea', width: 10 },
     { header: 'Tarea', key: 'titulo', width: 30 },
     { header: 'Descripción', key: 'descripcion', width: 40 },
     { header: 'Responsable', key: 'responsable', width: 25 },
@@ -545,7 +550,7 @@ const exportarExcel = async (filtros, rol, idUsuario) => {
   ];
   tareas.forEach((tarea) => worksheet.addRow(tarea));
   worksheet.getRow(1).font = { bold: true };
-  worksheet.autoFilter = { from: 'A1', to: 'M1' };
+  worksheet.autoFilter = { from: 'A1', to: 'L1' };
   worksheet.views = [{ state: 'frozen', ySplit: 1 }];
   return { workbook };
 };
